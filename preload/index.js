@@ -8,22 +8,22 @@ contextBridge.exposeInMainWorld("aesop", {
   },
 
   fs: {
-    readDir: (relPath) => ipcRenderer.invoke("fs:readDir", relPath),
-    readFile: (relPath) => ipcRenderer.invoke("fs:readFile", relPath),
-    writeFile: (relPath, content) =>
-      ipcRenderer.invoke("fs:writeFile", relPath, content),
-    newFile: (relPath) => ipcRenderer.invoke("fs:newFile", relPath),
-    newFolder: (relPath) => ipcRenderer.invoke("fs:newFolder", relPath),
+    readDir: (dir) => ipcRenderer.invoke("fs:readDir", { dir }),
+    readFile: (filePath) => ipcRenderer.invoke("fs:readFile", { filePath }),
+    writeFile: (filePath, content) =>
+      ipcRenderer.invoke("fs:writeFile", { filePath, content }),
+    newFile: (filePath) => ipcRenderer.invoke("fs:newFile", { filePath }),
+    newFolder: (dir) => ipcRenderer.invoke("fs:newFolder", { dir }),
   },
 
   git: {
     status: () => ipcRenderer.invoke("git:status"),
-    commit: (message) => ipcRenderer.invoke("git:commit", message),
+    commit: (message) => ipcRenderer.invoke("git:commit", { message }),
     push: () => ipcRenderer.invoke("git:push"),
     pull: () => ipcRenderer.invoke("git:pull"),
   },
 
-    prompt: {
+  prompt: {
     send: (promptText, options = {}) =>
       ipcRenderer.invoke("prompt:send", {
         prompt: promptText,

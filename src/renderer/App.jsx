@@ -9,6 +9,7 @@ import EditorTabs from "./components/EditorTabs";
 import EditorPanel from "./components/EditorPanel";
 import BottomPanel from "./components/BottomPanel";
 import PromptPanel from "./components/PromptPanel";
+import InputModal from "./components/InputModal";
 import StatusBar from "./components/StatusBar";
 
 import { getRoot, openFolderDialog } from "./lib/project";
@@ -27,6 +28,8 @@ export default function App() {
     const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false);
     const [sidebarWidth, setSidebarWidth] = useState(250);
     const [bottomPanelHeight, setBottomPanelHeight] = useState(200);
+
+    const [modal, setModal] = useState(null); // { title, message, onConfirm }
 
     useEffect(() => {
         async function loadRoot() {
@@ -155,28 +158,40 @@ export default function App() {
         }
     }
 
-    async function handleNewFile() {
-        const name = window.prompt("New file name (relative to root):");
-        if (!name) return;
-        try {
-            await newFile(name);
-            setStatusMessage(`Created file ${name}`);
-        } catch (err) {
-            console.error("newFile error:", err);
-            setStatusMessage("Error creating file");
-        }
+    function handleNewFile() {
+        setModal({
+            title: "New File",
+            message: "Enter file name (relative to root):",
+            onConfirm: async (name) => {
+                if (!name) return;
+                try {
+                    await newFile(name);
+                    setStatusMessage(`Created file ${name}`);
+                    setModal(null);
+                } catch (err) {
+                    console.error("newFile error:", err);
+                    setStatusMessage("Error creating file");
+                }
+            }
+        });
     }
 
-    async function handleNewFolder() {
-        const name = window.prompt("New folder name (relative to root):");
-        if (!name) return;
-        try {
-            await newFolder(name);
-            setStatusMessage(`Created folder ${name}`);
-        } catch (err) {
-            console.error("newFolder error:", err);
-            setStatusMessage("Error creating folder");
-        }
+    function handleNewFolder() {
+        setModal({
+            title: "New Folder",
+            message: "Enter folder name (relative to root):",
+            onConfirm: async (name) => {
+                if (!name) return;
+                try {
+                    await newFolder(name);
+                    setStatusMessage(`Created folder ${name}`);
+                    setModal(null);
+                } catch (err) {
+                    console.error("newFolder error:", err);
+                    setStatusMessage("Error creating folder");
+                }
+            }
+        });
     }
 
     async function handleTestSupabase() {
@@ -258,6 +273,15 @@ export default function App() {
                 activeTab={activeTab}
                 message={statusMessage}
             />
+
+            {modal && (
+                <InputModal
+                    title={modal.title}
+                    message={modal.message}
+                    onConfirm={modal.onConfirm}
+                    onCancel={() => setModal(null)}
+                />
+            )}
         </div>
     );
 }
