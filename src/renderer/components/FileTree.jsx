@@ -88,53 +88,54 @@ export default function FileTree({ rootPath, onOpenFile }) {
     async function toggleFolder(target) {
         if (!target.isDirectory) return;
 
-        setNodes((prev) => {
-            const clone = prev.map((n) => ({ ...n }));
-            async function expandFor(list) {
-                for (const node of list) {
-                    if (node.path === target.path) {
-                        if (!node.expanded) {
-                            // load children
-                            try {
-                                readDirectory(node.path).then((entries) => {
-                                    const children = entries.map((e) => ({
-                                        name: e.name,
-                                        path: joinPath(node.path, e.name),
-                                        isDirectory: e.isDirectory,
-                                        expanded: false,
-                                        children: [],
-                                        level: node.level + 1,
-                                    }));
-                                    setNodes((curr) => {
-                                        function updateNode(arr) {
-                                            return arr.map((x) => {
-                                                if (x.path === node.path) {
-                                                    return { ...x, expanded: true, children };
-                                                }
-                                                if (x.children && x.children.length) {
-                                                    return { ...x, children: updateNode(x.children) };
-                                                }
-                                                return x;
-                                            });
-                                        }
-                                        return updateNode(curr);
-                                    });
-                                });
-                            } catch (err) {
-                                console.error("Folder expand error:", err);
-                            }
-                        } else {
-                            node.expanded = false;
+        // If collapsing, just toggle expanded state
+        if (target.expanded) {
+            setNodes((prev) => {
+                function toggle(list) {
+                    return list.map((node) => {
+                        if (node.path === target.path) {
+                            return { ...node, expanded: false };
                         }
-                    }
-                    if (node.children && node.children.length) {
-                        await expandFor(node.children);
-                    }
+                        if (node.children) {
+                            return { ...node, children: toggle(node.children) };
+                        }
+                        return node;
+                    });
                 }
-            }
-            expandFor(clone);
-            return clone;
-        });
+                return toggle(prev);
+            });
+            return;
+        }
+
+        // If expanding, load children
+        try {
+            const entries = await readDirectory(target.path);
+            const children = entries.map((e) => ({
+                name: e.name,
+                path: joinPath(target.path, e.name),
+                isDirectory: e.isDirectory,
+                expanded: false,
+                children: [],
+                level: target.level + 1,
+            }));
+
+            setNodes((prev) => {
+                function update(list) {
+                    return list.map((node) => {
+                        if (node.path === target.path) {
+                            return { ...node, expanded: true, children };
+                        }
+                        if (node.children) {
+                            return { ...node, children: update(node.children) };
+                        }
+                        return node;
+                    });
+                }
+                return update(prev);
+            });
+        } catch (err) {
+            console.error("Folder expand error:", err);
+        }
     }
 
     function flatten(list) {

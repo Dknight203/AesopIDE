@@ -193,6 +193,17 @@ export default function App() {
         }
     }
 
+    async function handleApplyCode(code) {
+        if (!activePath) {
+            setStatusMessage("No file open to apply code");
+            return;
+        }
+
+        // Update content of active tab
+        updateActiveContent(code);
+        setStatusMessage("Code applied to " + activePath);
+    }
+
     const activeTab = findTab(activePath);
 
     return (
@@ -234,7 +245,10 @@ export default function App() {
                 </div>
 
                 <div className={`app-right-sidebar ${!promptOpen ? 'collapsed' : ''}`}>
-                    <PromptPanel onClose={() => setPromptOpen(false)} />
+                    <PromptPanel
+                        onClose={() => setPromptOpen(false)}
+                        onApplyCode={handleApplyCode}
+                    />
                 </div>
             </div>
 

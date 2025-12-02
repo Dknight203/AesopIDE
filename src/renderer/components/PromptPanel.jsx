@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import "../styles/prompt.css";
 
-export default function PromptPanel({ onClose }) {
+export default function PromptPanel({ onClose, onApplyCode }) {
     const [messages, setMessages] = useState([
         {
             role: "assistant",
@@ -92,13 +92,22 @@ export default function PromptPanel({ onClose }) {
                     <div key={idx} className="code-block">
                         <div className="code-block-header">
                             <span className="code-language">{language}</span>
-                            <button
-                                className="code-copy-btn"
-                                onClick={() => copyToClipboard(code)}
-                                title="Copy code"
-                            >
-                                📋 Copy
-                            </button>
+                            <div className="code-actions">
+                                <button
+                                    className="code-action-btn"
+                                    onClick={() => onApplyCode && onApplyCode(code)}
+                                    title="Apply to current file"
+                                >
+                                    ⚡ Apply
+                                </button>
+                                <button
+                                    className="code-action-btn"
+                                    onClick={() => copyToClipboard(code)}
+                                    title="Copy code"
+                                >
+                                    📋 Copy
+                                </button>
+                            </div>
                         </div>
                         <pre className="code-pre">
                             <code>{code}</code>
