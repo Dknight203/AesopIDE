@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("aesop", {
     send: (promptText, options = {}) =>
       ipcRenderer.invoke("prompt:send", {
         prompt: promptText,
+        systemPrompt: options.systemPrompt || "",
         fileContext: options.fileContext || null,
         cursor: options.cursor || null,
       }),
