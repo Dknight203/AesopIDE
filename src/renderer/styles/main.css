@@ -1,0 +1,155 @@
+body {
+    margin: 0;
+    background: #1e1e1e;
+    color: white;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+
+/* LAYOUT */
+.layout {
+    display: flex;
+    height: calc(100vh - 30px);
+    width: 100vw;
+}
+
+.sidebar {
+    width: 200px;
+    background: #111;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-right: 1px solid #333;
+}
+
+.sidebar-title {
+    font-size: 20px;
+    margin-bottom: 10px;
+}
+
+.sidebar-btn {
+    padding: 8px;
+    border: none;
+    background: #333;
+    color: white;
+    cursor: pointer;
+}
+
+    .sidebar-btn:hover {
+        background: #444;
+    }
+
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+}
+
+.filetree {
+    width: 200px;
+    background: #161616;
+    border-right: 1px solid #333;
+    overflow-y: auto;
+}
+
+.filetree-title {
+    padding: 10px;
+    font-size: 16px;
+    background: #222;
+    border-bottom: 1px solid #444;
+}
+
+.filetree-item {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+    .filetree-item:hover {
+        background: #333;
+    }
+
+.editor {
+    flex: 1;
+}
+
+.terminal {
+    height: 180px;
+    background: black;
+    color: lime;
+    font-family: monospace;
+    overflow-y: auto;
+    border-top: 1px solid #333;
+}
+
+.terminal-title {
+    padding: 6px;
+    background: #222;
+    border-bottom: 1px solid #444;
+}
+
+.terminal-output {
+    padding: 10px;
+}
+
+.statusbar {
+    height: 30px;
+    background: #111;
+    color: white;
+    padding: 5px 10px;
+    display: flex;
+    align-items: center;
+    border-top: 1px solid #333;
+}
+
+.prompt-panel {
+    position: absolute;
+    top: 50px;
+    left: 300px;
+    width: 600px;
+    height: 500px;
+    background: #222;
+    border: 1px solid #444;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+.prompt-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 18px;
+    border-bottom: 1px solid #444;
+    padding-bottom: 8px;
+}
+
+.prompt-close {
+    background: red;
+    border: none;
+    color: white;
+    cursor: pointer;
+}
+
+.prompt-input,
+.prompt-output {
+    margin-top: 10px;
+    flex: 1;
+    background: #111;
+    color: white;
+    border: 1px solid #333;
+    padding: 10px;
+    resize: none;
+}
+
+.prompt-run {
+    margin-top: 10px;
+    padding: 10px;
+    border: none;
+    background: #444;
+    color: white;
+    cursor: pointer;
+}
+
+    .prompt-run:hover {
+        background: #555;
+    }

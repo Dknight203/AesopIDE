@@ -1,0 +1,104 @@
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-3);
+    gap: var(--space-4);
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    height: 40px;
+}
+
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-shrink: 0;
+}
+
+.topbar-center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+}
+
+.topbar-title {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-light);
+    user-select: none;
+    letter-spacing: 0.5px;
+}
+
+.topbar-actions {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+/* Icon-only buttons */
+.topbar-icon-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-size: var(--font-size-lg);
+    border-radius: var(--radius);
+    transition: all var(--transition-base);
+}
+
+.topbar-icon-btn:hover {
+    background: var(--panel-light);
+    border-color: var(--border);
+    color: var(--text-light);
+    transform: none;
+}
+
+.topbar-icon-btn:active {
+    background: var(--panel-lighter);
+}
+
+/* Accent button variant */
+.topbar-btn-accent {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--bg-dark);
+    font-weight: var(--font-weight-semibold);
+}
+
+.topbar-btn-accent:hover {
+    background: var(--accent-primary-hover);
+    border-color: var(--accent-primary-hover);
+}
+
+/* Ghost button variant */
+.topbar-btn-ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-secondary);
+}
+
+.topbar-btn-ghost:hover {
+    background: var(--panel-light);
+    border-color: var(--border-light);
+    color: var(--text-light);
+}
+
+/* Regular topbar buttons */
+.topbar button:not(.topbar-icon-btn):not(.topbar-btn-accent):not(.topbar-btn-ghost) {
+    font-size: var(--font-size-sm);
+    padding: var(--space-2) var(--space-3);
+}

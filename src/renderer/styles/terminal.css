@@ -1,0 +1,19 @@
+.terminal {
+    font-family: var(--font);
+    background: black;
+    color: #00ff00;
+}
+
+.terminal-line {
+    white-space: pre-wrap;
+    margin-bottom: 3px;
+}
+
+.terminal-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #0f0;
+    font-size: 13px;
+}

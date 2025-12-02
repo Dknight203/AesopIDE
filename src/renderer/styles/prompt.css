@@ -1,0 +1,26 @@
+.prompt-window {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 380px;
+    height: 260px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+}
+
+    .prompt-window textarea {
+        flex: 1;
+        background: var(--bg-light);
+        border: 1px solid var(--border);
+        resize: none;
+        padding: 6px;
+        color: var(--text-light);
+    }
+
+    .prompt-window button {
+        margin-top: 10px;
+    }
