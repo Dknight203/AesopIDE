@@ -1,0 +1,112 @@
+/* Git Panel */
+.git-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+/* Git Actions */
+.git-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.git-action-group {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.git-btn {
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
+    background: var(--panel-light);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-weight: var(--font-weight-medium);
+}
+
+.git-btn:hover:not(:disabled) {
+    background: var(--panel-lighter);
+    border-color: var(--border-light);
+    transform: translateY(-1px);
+}
+
+.git-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.git-btn-primary {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--bg-dark);
+}
+
+.git-btn-primary:hover:not(:disabled) {
+    background: var(--accent-primary-hover);
+    border-color: var(--accent-primary-hover);
+}
+
+/* Commit Section */
+.git-commit-section {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.git-commit-input {
+    flex: 1;
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-light);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    border-radius: var(--radius);
+}
+
+.git-commit-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+}
+
+/* Git Log */
+.git-log {
+    padding: var(--space-3);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    border-left: 3px solid var(--accent-primary);
+}
+
+/* Git Status */
+.git-status {
+    padding: var(--space-3);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.git-status-header {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-light);
+    margin-bottom: var(--space-2);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border);
+}
+
+.git-status-pre {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    margin: 0;
+    overflow-x: auto;
+    white-space: pre-wrap;
+}

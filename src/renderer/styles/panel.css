@@ -1,0 +1,66 @@
+/* Bottom Panel Wrapper */
+.bottom-panel-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--panel-dark);
+}
+
+/* Panel Tabs */
+.panel-tabs {
+    display: flex;
+    gap: 1px;
+    background: var(--border);
+}
+
+.panel-tab {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: var(--panel);
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-radius: 0;
+}
+
+.panel-tab:hover {
+    background: var(--panel-light);
+    color: var(--text);
+    transform: none;
+}
+
+.panel-tab.active {
+    background: var(--panel-dark);
+    color: var(--text-light);
+    border-bottom-color: var(--accent-primary);
+}
+
+.panel-tab-icon {
+    font-size: var(--font-size-base);
+}
+
+.panel-tab-label {
+    user-select: none;
+}
+
+/* Panel Content */
+.panel-content {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-3);
+    background: var(--panel-dark);
+}
+
+/* Output Panel */
+.output-panel {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

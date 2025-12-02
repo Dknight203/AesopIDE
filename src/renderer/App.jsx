@@ -7,7 +7,7 @@ import TopBar from "./components/TopBar";
 import FileTree from "./components/FileTree";
 import EditorTabs from "./components/EditorTabs";
 import EditorPanel from "./components/EditorPanel";
-import GitPanel from "./components/GitPanel";
+import BottomPanel from "./components/BottomPanel";
 import PromptPanel from "./components/PromptPanel";
 import StatusBar from "./components/StatusBar";
 
@@ -21,7 +21,7 @@ export default function App() {
     const [activePath, setActivePath] = useState("");
     const [promptOpen, setPromptOpen] = useState(false);
     const [statusMessage, setStatusMessage] = useState("");
-    
+
     // Layout state
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false);
@@ -60,7 +60,7 @@ export default function App() {
                 saveActiveFile();
             }
         }
-        
+
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [activePath, tabs]);
@@ -102,12 +102,12 @@ export default function App() {
         if (!activePath) return;
         setTabs((prev) =>
             prev.map((t) =>
-                t.path === activePath 
-                    ? { 
-                        ...t, 
+                t.path === activePath
+                    ? {
+                        ...t,
                         content: newContent,
-                        isDirty: newContent !== t.originalContent 
-                    } 
+                        isDirty: newContent !== t.originalContent
+                    }
                     : t
             )
         );
@@ -229,7 +229,7 @@ export default function App() {
                     />
 
                     <div className={`bottom-panels ${bottomPanelCollapsed ? 'collapsed' : ''}`}>
-                        <GitPanel />
+                        <BottomPanel />
                         {promptOpen && (
                             <PromptPanel onClose={() => setPromptOpen(false)} />
                         )}
