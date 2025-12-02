@@ -111,68 +111,66 @@ export default function PromptPanel({ onClose }) {
     };
 
     return (
-        <div className="prompt-panel-overlay" onClick={onClose}>
-            <div className="prompt-panel" onClick={(e) => e.stopPropagation()}>
-                <div className="prompt-header">
-                    <div className="prompt-header-left">
-                        <span className="prompt-title">✨ AI Assistant</span>
-                    </div>
-                    <div className="prompt-header-right">
-                        <button
-                            className="prompt-action-btn"
-                            onClick={() => setMessages([])}
-                            title="Clear conversation"
-                        >
-                            🗑️
-                        </button>
-                        <button
-                            className="prompt-close-btn"
-                            onClick={onClose}
-                            title="Close"
-                        >
-                            ✕
-                        </button>
-                    </div>
+        <div className="prompt-panel">
+            <div className="prompt-header">
+                <div className="prompt-header-left">
+                    <span className="prompt-title">✨ AI Assistant</span>
                 </div>
-
-                <div className="prompt-messages scrollable">
-                    {messages.map((msg, idx) => renderMessage(msg, idx))}
-                    {isLoading && (
-                        <div className="message message-assistant">
-                            <div className="message-header">
-                                <span className="message-role">🤖 Assistant</span>
-                            </div>
-                            <div className="message-content">
-                                <div className="loading-dots">
-                                    <span></span>
-                                    <span></span>
-                                    <span></span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                </div>
-
-                <div className="prompt-input-area">
-                    <textarea
-                        ref={inputRef}
-                        className="prompt-input"
-                        placeholder="Ask me anything... (Shift+Enter for new line)"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        rows={3}
-                    />
+                <div className="prompt-header-right">
                     <button
-                        className="prompt-send-btn"
-                        onClick={handleSend}
-                        disabled={!input.trim() || isLoading}
-                        title="Send message (Enter)"
+                        className="prompt-action-btn"
+                        onClick={() => setMessages([])}
+                        title="Clear conversation"
                     >
-                        {isLoading ? "⏳" : "📤"} Send
+                        🗑️
+                    </button>
+                    <button
+                        className="prompt-close-btn"
+                        onClick={onClose}
+                        title="Close"
+                    >
+                        ✕
                     </button>
                 </div>
+            </div>
+
+            <div className="prompt-messages scrollable">
+                {messages.map((msg, idx) => renderMessage(msg, idx))}
+                {isLoading && (
+                    <div className="message message-assistant">
+                        <div className="message-header">
+                            <span className="message-role">🤖 Assistant</span>
+                        </div>
+                        <div className="message-content">
+                            <div className="loading-dots">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
+            </div>
+
+            <div className="prompt-input-area">
+                <textarea
+                    ref={inputRef}
+                    className="prompt-input"
+                    placeholder="Ask me anything... (Shift+Enter for new line)"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    rows={3}
+                />
+                <button
+                    className="prompt-send-btn"
+                    onClick={handleSend}
+                    disabled={!input.trim() || isLoading}
+                    title="Send message (Enter)"
+                >
+                    {isLoading ? "⏳" : "📤"} Send
+                </button>
             </div>
         </div>
     );

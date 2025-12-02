@@ -20,7 +20,7 @@ function createWindow() {
   if (process.env.VITE_DEV_SERVER_URL) {
     // Dev mode uses Vite dev server
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
-    win.webContents.openDevTools();
+    // win.webContents.openDevTools(); // Disabled for cleaner UI - use Ctrl+Shift+I to toggle
   } else {
     // Production uses bundled renderer
     win.loadFile(path.join(__dirname, "renderer", "index.html"));

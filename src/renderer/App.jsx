@@ -230,10 +230,11 @@ export default function App() {
 
                     <div className={`bottom-panels ${bottomPanelCollapsed ? 'collapsed' : ''}`}>
                         <BottomPanel />
-                        {promptOpen && (
-                            <PromptPanel onClose={() => setPromptOpen(false)} />
-                        )}
                     </div>
+                </div>
+
+                <div className={`app-right-sidebar ${!promptOpen ? 'collapsed' : ''}`}>
+                    <PromptPanel onClose={() => setPromptOpen(false)} />
                 </div>
             </div>
 
