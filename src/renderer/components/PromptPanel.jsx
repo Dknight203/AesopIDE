@@ -8,30 +8,72 @@ import parseToolCalls from "../lib/ai/toolParser";
 import { executeTool } from "../lib/tools/framework";
 
 
-// UPDATED PROPS: Added onOpenCommand
 export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activeTab, rootPath, codebaseIndex }) {
-    const [messages, setMessages] = useState([
-        {
-            role: "assistant",
-            content:
-                "Hello. I am your AI assistant inside AesopIDE. Ask me about your code or project and I will help.",
-            timestamp: new Date(),
-        },
-    ]);
+    // Initialize state with a standard welcome message
+    const initialMessage = {
+        role: "assistant",
+        content:
+            "Hello. I am your AI assistant inside AesopIDE. Ask me about your code or project and I will help.",
+        timestamp: new Date(),
+    };
+
+    const [messages, setMessages] = useState([initialMessage]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
+    // -----------------------------------------------------------
+    // PHASE 4.1: HISTORY LOADING & SAVING
+    // -----------------------------------------------------------
+
+    // Load history on initial mount and whenever rootPath changes (i.e., new project loaded)
+    useEffect(() => {
+        async function loadHistory() {
+            try {
+                const result = await window.aesop.history.load();
+                if (result.ok && result.messages && result.messages.length > 0) {
+                    // Only use saved history if it's not just the welcome message
+                    setMessages(result.messages);
+                } else {
+                    setMessages([initialMessage]); // Fallback to welcome message
+                }
+            } catch (err) {
+                console.error("Failed to load conversation history:", err);
+                setMessages([initialMessage]); // Use default on error
+            }
+        }
+        
+        if (rootPath) {
+            loadHistory();
+        }
+    }, [rootPath]); // Re-run when project root changes
+
+    // Save history whenever messages change, debounce to avoid writing too often
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            if (messages.length > 1) { // Only save after the welcome message is gone
+                window.aesop.history.save(messages).catch(err => {
+                    console.error("Failed to save conversation history:", err);
+                });
+            }
+        }, 500);
+
+        return () => clearTimeout(handler); // Cleanup on unmount or before next effect run
+    }, [messages]);
+
+
+    // Scroll to bottom on message change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
+    // Focus input when terminal is visible
     useEffect(() => {
         inputRef.current?.focus();
     }, []);
     
-    // NEW HELPER: For consistent message logging in the chat
+    // Helper function used by App.jsx's autoOpenFileAndMessage
     const appendMessage = (role, content) => {
         const newMessage = {
             role,
@@ -46,31 +88,22 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
         const text = input;
         
-        // -----------------------------------------------------------
-        // NEW LOGIC START: INTERCEPT RENDERER-SIDE OPEN COMMANDS
-        // -----------------------------------------------------------
+        // INTERCEPT RENDERER-SIDE OPEN COMMANDS
         const OPEN_COMMAND_REGEX = /^(?:bring up|open|show|display)\s+(.+?)$/i;
         const match = text.trim().match(OPEN_COMMAND_REGEX);
 
         if (match && onOpenCommand) {
-            // Extract the token (the 'X' in "bring up X") and clean up any trailing "file" or "files"
             const token = match[1].trim().replace(/\s+file(s)?$/i, '').trim(); 
             
-            // 1. Display user message immediately
             appendMessage("user", text);
             setInput("");
             setIsLoading(true);
 
-            // 2. Execute the multi-step open command logic in App.jsx
-            // onOpenCommand handles findFiles, readFile, setActivePath, and appends the final clean message
             await onOpenCommand(token, appendMessage);
             
             setIsLoading(false);
-            return; // EXIT: Command handled, prevent sending to AI.
+            return; // EXIT: Command handled locally.
         }
-        // -----------------------------------------------------------
-        // NEW LOGIC END
-        // -----------------------------------------------------------
 
 
         const userMessage = {
@@ -114,7 +147,8 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         const reply = await askGemini(userPrompt, {
             systemPrompt: SYSTEM_PROMPT,
             fileContext,
-            // TODO: Pass history if askGemini supports it, currently it seems stateless per call
+            // Pass the entire history array for continuous context (Phase 4.1)
+            history: history 
         });
         const aiMessage = {
             role: "assistant",
@@ -129,7 +163,6 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         if (toolCalls.length > 0) {
             // Execute tools
             for (const call of toolCalls) {
-                // Check if tool is one we want to suppress verbose JSON output for
                 const isFileOp = ['writeFile', 'readFile', 'findFiles', 'createTask', 'readTask', 'createPlan', 'readPlan'].includes(call.tool);
                 
                 const toolMsg = {
@@ -143,19 +176,16 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                 try {
                     const result = await executeTool(call.tool, call.params);
                     
-                    // Auto-open file if created or read (Existing logic, modified for clarity)
+                    // Auto-open file if created or read
                     if (['createTask', 'readTask', 'createPlan', 'readPlan', 'writeFile', 'readFile'].includes(call.tool)) {
-                        // Determine path from result or params
                         let path = null;
                         if (result && result.path) path = result.path;
                         else if (call.params && call.params.path) path = call.params.path;
                         
-                        // Special case for task/plan tools that imply a specific path
                         if (!path) {
                             if (call.tool.includes('Task')) path = '.aesop/task.md';
                             if (call.tool.includes('Plan')) path = '.aesop/implementation_plan.md';
                         } else {
-                            // If path is provided but missing .aesop prefix for task files, add it
                             if ((path === 'task.md' || path === '/task.md') && call.tool.includes('Task')) {
                                 path = '.aesop/task.md';
                             }
@@ -165,27 +195,21 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                         }
 
 
-                        // onOpenFile is NOT passed to PromptPanel, but handleApplyCode's openFileByPath achieves the same goal
                         if (path && onApplyCode) { 
-                            // Simulate the open action by passing a dummy AI response to onApplyCode
                             setTimeout(() => onApplyCode(`AesopIDE open file: ${path}`), 100);
                         }
                     }
 
 
-                    // -----------------------------------------------------------
-                    // NEW LOGIC: TOOL RESULT SUPPRESSION
-                    // -----------------------------------------------------------
+                    // TOOL RESULT SUPPRESSION
                     let resultMsg;
                     if (isFileOp) {
-                        // Hide raw JSON for core file/plan operations (Fix 2)
                         resultMsg = {
                             role: "tool_result",
                             content: `Tool **'${call.tool}'** executed successfully.`,
                             timestamp: new Date()
                         };
                     } else {
-                        // Keep verbose JSON for other tools (like complex file search or git commands)
                         resultMsg = {
                             role: "tool_result",
                             content: `Tool '${call.tool}' output:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``,
@@ -193,17 +217,14 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                         };
                     }
                     setMessages(prev => [...prev, resultMsg]);
-                    // -----------------------------------------------------------
 
 
                     // 3. Send result back to AI (recursive)
-                    // For now, we just append the result to the prompt and ask AI to continue
                     const followUpPrompt = `Tool '${call.tool}' returned:\n${JSON.stringify(result, null, 2)}\n\nPlease continue based on this result.`;
-                    // Recursive call to process the tool result
-                    // Note: In a real chat system we'd append to history, but here we just chain calls
                     const followUpReply = await askGemini(followUpPrompt, {
                         systemPrompt: SYSTEM_PROMPT,
                         fileContext,
+                        history: [...history, aiMessage, resultMsg] // Pass updated history to recursive call
                     });
                     const followUpMsg = {
                         role: "assistant",
@@ -211,10 +232,6 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                         timestamp: new Date()
                     };
                     setMessages(prev => [...prev, followUpMsg]);
-
-
-                    // Check if follow-up has more tools (limit recursion depth in real impl)
-                    // For now, let's stop after one level to prevent loops
 
 
                 } catch (err) {
@@ -229,7 +246,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         }
 
 
-        // Auto-apply if applicable (only for the final reply, but here we check the first one too)
+        // Auto-apply if applicable
         if (hasActionableContent(reply) && onApplyCode) {
             setTimeout(() => onApplyCode(reply), 100);
         }
@@ -261,7 +278,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
 
         // Check for fenced code blocks
-        if (content.match(/```[\\s\\S]*?```/)) {
+        if (content.match(/```[\\s\S]*?```/)) {
             return true;
         }
 
@@ -332,20 +349,15 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         if (isToolResult) roleLabel = "📝 Result";
         if (isToolError) roleLabel = "⚠️ Error";
         
-        // Parse tool content if it's a tool call
+        // Use a concise message for tool actions that don't need raw content exposed
         let displayContent = message.content;
-        if (isTool) {
-            // We just set this message when calling the tool in handleSend, so no parsing needed
-        }
-        
-        // Clean up tool result content for display in the chat window
-        if (isToolResult) {
-            // Check if it's the suppressed message we added in processAiTurn
-            if (displayContent.startsWith("Tool **")) {
-                // Keep the clean message
-            } else {
-                // If it's a full JSON dump (e.g., from git status), just show a summary
-                displayContent = `Tool result received.`;
+        if (isToolResult && displayContent.includes('Tool **')) {
+            // This handles the generic suppressed message
+        } else if (isToolResult && displayContent.includes('Tool ')) {
+            // This attempts to clean up the content for better display in the log
+            displayContent = displayContent.replace(/Tool '.*?' output:\n```json\n/, '').replace(/\n```/g, '');
+            if (displayContent.length > 200) {
+                 displayContent = displayContent.substring(0, 200) + '... (truncated JSON)';
             }
         }
 

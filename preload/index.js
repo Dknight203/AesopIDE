@@ -42,9 +42,15 @@ contextBridge.exposeInMainWorld("aesop", {
         searchCode: (query, options) => ipcRenderer.invoke("codebase:search", { query, options }),
         findFiles: (pattern) => ipcRenderer.invoke("codebase:findFiles", { pattern }),
 
-        // NEW: Expose terminal command handlers
+        // Expose terminal command handlers
         runCommand: (command) => ipcRenderer.invoke("cmd:run", command),
         getCommandOutput: (id) => ipcRenderer.invoke("cmd:getOutput", id),
         killCommand: (id) => ipcRenderer.invoke("cmd:kill", id),
+    },
+
+    // NEW BRIDGE: History management (Phase 4.1)
+    history: {
+        save: (messages) => ipcRenderer.invoke("history:save", messages),
+        load: () => ipcRenderer.invoke("history:load"),
     }
 });

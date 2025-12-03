@@ -4,11 +4,17 @@ const path = require("path");
 const fs = require("fs").promises;
 const fsSync = require("fs");
 const simpleGit = require("simple-git");
-const { createClient } = require("@supabase/supabase-js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { createClient } = require("@supabase/supabase-js");
+const { spawn } = require('child_process');
+const { nanoid } = require('nanoid');
 
 // Track current project root (folder opened in the IDE)
 let currentRoot = process.cwd();
+
+// NEW: Track active commands by ID
+const activeCommands = new Map();
+const commandOutput = new Map();
 
 // Normalize a "relative path" argument that might be a string or an object
 function normalizeRelPath(arg, objectKeys = []) {
@@ -175,7 +181,7 @@ function registerIpcHandlers() {
         const dir = path.dirname(fullPath);
         await fs.mkdir(dir, { recursive: true });
         await fs.writeFile(fullPath, content ?? "", "utf8");
-        return { ok: true };
+        return { ok: true, path: relPath };
     });
 
     ipcMain.handle("fs:newFile", async (event, arg) => {
@@ -193,7 +199,7 @@ function registerIpcHandlers() {
             await fs.writeFile(fullPath, "", "utf8");
         }
 
-        return { ok: true };
+        return { ok: true, path: relPath };
     });
 
     ipcMain.handle("fs:newFolder", async (event, arg) => {
@@ -206,8 +212,61 @@ function registerIpcHandlers() {
 
         const fullPath = path.resolve(root, relPath);
         await fs.mkdir(fullPath, { recursive: true });
-        return { ok: true };
+        return { ok: true, path: relPath };
     });
+    
+    // ---------------------------------------------------------------------------
+    // PHASE 4.1: CONVERSATION HISTORY
+    // ---------------------------------------------------------------------------
+
+    ipcMain.handle("history:save", async (event, messages) => {
+        const root = ensureRoot();
+        const historyPath = path.join(root, ".aesop", "history.json");
+        
+        try {
+            // Ensure .aesop directory exists
+            const dir = path.dirname(historyPath);
+            await fs.mkdir(dir, { recursive: true });
+
+            // Convert message timestamps (Date objects) to ISO strings for serialization
+            const serializableMessages = messages.map(msg => ({
+                ...msg,
+                timestamp: msg.timestamp instanceof Date ? msg.timestamp.toISOString() : msg.timestamp
+            }));
+
+            await fs.writeFile(historyPath, JSON.stringify(serializableMessages, null, 2), "utf8");
+            return { ok: true };
+        } catch (err) {
+            console.error("[AesopIDE history:save error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
+
+    ipcMain.handle("history:load", async () => {
+        const root = ensureRoot();
+        const historyPath = path.join(root, ".aesop", "history.json");
+
+        if (!fsSync.existsSync(historyPath)) {
+            return { ok: true, messages: [] }; // Return empty array if file doesn't exist
+        }
+
+        try {
+            const content = await fs.readFile(historyPath, "utf8");
+            const messages = JSON.parse(content);
+            
+            // Convert ISO strings back to Date objects
+            const deserializedMessages = messages.map(msg => ({
+                ...msg,
+                timestamp: new Date(msg.timestamp)
+            }));
+            
+            return { ok: true, messages: deserializedMessages };
+        } catch (err) {
+            console.error("[AesopIDE history:load error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
+
 
     // ---------------------------------------------------------------------------
     // GIT using simple-git
@@ -272,113 +331,83 @@ function registerIpcHandlers() {
     });
 
     // ---------------------------------------------------------------------------
-    // ENV VARS IN PROJECT .env
+    // PHASE 3.4: COMMAND EXECUTION
     // ---------------------------------------------------------------------------
 
-    ipcMain.handle("env:get", async (event, key) => {
-        if (!key || typeof key !== "string") {
-            throw new Error("env:get requires a key");
-        }
-        return process.env[key] ?? null;
-    });
-
-    ipcMain.handle("env:set", async (event, key, value) => {
+    ipcMain.handle("cmd:run", async (event, command) => {
         const root = ensureRoot();
-        if (!key || typeof key !== "string") {
-            throw new Error("env:set requires a key");
+        const commandId = nanoid(10);
+        
+        if (!command || typeof command !== "string") {
+            return { ok: false, error: "Command string required." };
         }
+        
+        // Split command and arguments (simple approach for now)
+        const parts = command.split(/\s+/).filter(p => p.length > 0);
+        const cmd = parts[0];
+        const args = parts.slice(1);
+        
+        // Initialize output buffer for this command
+        commandOutput.set(commandId, `> ${command}\n`);
+        const processStartTime = new Date();
 
-        const envPath = path.join(root, ".env");
-        let existing = "";
-
-        if (fsSync.existsSync(envPath)) {
-            existing = await fs.readFile(envPath, "utf8");
-        }
-
-        const lines = existing
-            .split(/\r?\n/)
-            .filter((line) => line.trim().length > 0);
-
-        const keyLine = `${key}=${value ?? ""}`;
-        const index = lines.findIndex((line) => line.startsWith(key + "="));
-        if (index >= 0) {
-            lines[index] = keyLine;
-        } else {
-            lines.push(keyLine);
-        }
-
-        await fs.writeFile(envPath, lines.join("\n"), "utf8");
-        process.env[key] = value;
-        return { ok: true };
-    });
-
-    // ---------------------------------------------------------------------------
-    // PROMPT (Gemini) - used by the AI prompt window
-    // ---------------------------------------------------------------------------
-
-    ipcMain.handle("prompt:send", async (event, payloadOrText, maybeOptions = {}) => {
         try {
-            const model = getGeminiModel();
+            // Use shell: true to allow composite commands and system path resolution
+            const child = spawn(cmd, args, { cwd: root, shell: true });
+            activeCommands.set(commandId, child);
 
-            let systemPrompt = "";
-            let userPrompt = "";
-            let fileContext = null;
-            let cursor = null;
-
-            // Support two signatures:
-            // 1) prompt:send(text, options)
-            // 2) prompt:send({ prompt, systemPrompt, fileContext, cursor })
-            if (
-                typeof payloadOrText === "string" ||
-                payloadOrText instanceof String
-            ) {
-                userPrompt = payloadOrText;
-                if (maybeOptions && typeof maybeOptions === "object") {
-                    systemPrompt = maybeOptions.systemPrompt || "";
-                    fileContext = maybeOptions.fileContext || null;
-                    cursor = maybeOptions.cursor || null;
-                }
-            } else if (payloadOrText && typeof payloadOrText === "object") {
-                userPrompt = payloadOrText.prompt || "";
-                systemPrompt = payloadOrText.systemPrompt || "";
-                fileContext = payloadOrText.fileContext || null;
-                cursor = payloadOrText.cursor || null;
-            }
-
-            const parts = [];
-            if (systemPrompt) {
-                parts.push({ text: systemPrompt + "\n\n" });
-            }
-            if (fileContext) {
-                parts.push({ text: "Project context:\n" + fileContext + "\n\n" });
-            }
-            if (cursor) {
-                parts.push({ text: "Cursor context:\n" + cursor + "\n\n" });
-            }
-            parts.push({ text: userPrompt });
-
-            const result = await model.generateContent({
-                contents: [
-                    {
-                        role: "user",
-                        parts,
-                    },
-                ],
+            child.stdout.on('data', (data) => {
+                commandOutput.set(commandId, commandOutput.get(commandId) + data.toString());
             });
 
-            const response = result.response;
-            const outText =
-                typeof response.text === "function" ? response.text() : "";
+            child.stderr.on('data', (data) => {
+                commandOutput.set(commandId, commandOutput.get(commandId) + data.toString());
+            });
 
-            return { ok: true, text: outText };
+            const exitCode = await new Promise((resolve) => {
+                child.on('close', resolve);
+                child.on('error', (err) => {
+                    commandOutput.set(commandId, commandOutput.get(commandId) + `\n--- ERROR ---\n${err.message}\n`);
+                    resolve(1); // Non-zero exit code on error
+                });
+            });
+
+            activeCommands.delete(commandId);
+            const duration = new Date() - processStartTime;
+            
+            commandOutput.set(commandId, commandOutput.get(commandId) + `\n[Command finished in ${duration}ms with exit code ${exitCode}]`);
+
+            return { ok: true, id: commandId, output: commandOutput.get(commandId), exitCode };
+
         } catch (err) {
-            console.error("[AesopIDE prompt:send error]", err);
-            return {
-                ok: false,
-                text: err.message || String(err),
-            };
+            activeCommands.delete(commandId);
+            return { ok: false, id: commandId, output: commandOutput.get(commandId), error: err.message || String(err) };
         }
     });
+
+    ipcMain.handle("cmd:getOutput", (event, commandId) => {
+        if (!commandId || !commandOutput.has(commandId)) {
+            return { ok: false, error: "Command ID not found or output cleared." };
+        }
+        
+        return { ok: true, output: commandOutput.get(commandId) };
+    });
+
+    ipcMain.handle("cmd:kill", (event, commandId) => {
+        if (!commandId || !activeCommands.has(commandId)) {
+            return { ok: false, error: "Command ID not found or already finished." };
+        }
+        
+        const child = activeCommands.get(commandId);
+        child.kill();
+        activeCommands.delete(commandId);
+        
+        const output = commandOutput.get(commandId) + `\n[Command ${commandId} manually terminated.]`;
+        commandOutput.set(commandId, output);
+        
+        return { ok: true, output: output };
+    });
+
 
     // ---------------------------------------------------------------------------
     // CODEBASE SEARCH
@@ -489,133 +518,6 @@ function registerIpcHandlers() {
                 ok: false,
                 error: err.message || String(err),
             };
-        }
-    });
-
-    // ========================================
-    // TASK MANAGEMENT HANDLERS
-    // ========================================
-
-    // Create a new task.md file
-    ipcMain.handle("task:create", async (event, { taskData }) => {
-        try {
-            const root = ensureRoot();
-            const aesopDir = path.join(root, ".aesop");
-
-            // Ensure .aesop directory exists
-            try {
-                await fs.mkdir(aesopDir, { recursive: true });
-            } catch (err) {
-                // Directory might exist
-            }
-
-            const { title, sections } = taskData;
-            let markdown = `# ${title}\n\n`;
-
-            for (const section of sections) {
-                markdown += `## ${section.title}\n\n`;
-
-                for (const subsection of section.subsections || []) {
-                    markdown += `### ${subsection.title}\n`;
-
-                    for (const task of subsection.tasks || []) {
-                        const indent = '  '.repeat(task.indent || 0);
-                        const checkbox = task.status === 'complete' ? '[x]' :
-                            task.status === 'in-progress' ? '[/]' : '[ ]';
-                        markdown += `${indent}- ${checkbox} ${task.text}\n`;
-                    }
-
-                    markdown += '\n';
-                }
-            }
-
-            const taskPath = path.join(aesopDir, "task.md");
-            await fs.writeFile(taskPath, markdown, "utf8");
-
-            return { ok: true, path: taskPath };
-        } catch (err) {
-            console.error("[task:create error]", err);
-            return { ok: false, error: err.message };
-        }
-    });
-
-    // Read task.md file
-    ipcMain.handle("task:read", async () => {
-        try {
-            const root = ensureRoot();
-            const taskPath = path.join(root, ".aesop", "task.md");
-
-            const content = await fs.readFile(taskPath, "utf8");
-            return { ok: true, content };
-        } catch (err) {
-            // File doesn't exist or can't be read
-            return { ok: false, error: err.message };
-        }
-    });
-
-    // Update task status
-    ipcMain.handle("task:update", async (event, { taskText, status }) => {
-        try {
-            const root = ensureRoot();
-            const taskPath = path.join(root, ".aesop", "task.md");
-
-            const content = await fs.readFile(taskPath, "utf8");
-            const statusChar = status === 'complete' ? 'x' :
-                status === 'in-progress' ? '/' : ' ';
-
-            const lines = content.split('\n');
-            let updated = false;
-
-            for (let i = 0; i < lines.length; i++) {
-                if (lines[i].includes(taskText) && lines[i].match(/- \[[ x/]\]/)) {
-                    lines[i] = lines[i].replace(/- \[[ x/]\]/, `- [${statusChar}]`);
-                    updated = true;
-                    break;
-                }
-            }
-
-            if (updated) {
-                await fs.writeFile(taskPath, lines.join('\n'), "utf8");
-            }
-
-            return { ok: true, updated };
-        } catch (err) {
-            console.error("[task:update error]", err);
-            return { ok: false, error: err.message };
-        }
-    });
-
-    // Update multiple tasks at once
-    ipcMain.handle("task:updateMultiple", async (event, { updates }) => {
-        try {
-            const root = ensureRoot();
-            const taskPath = path.join(root, ".aesop", "task.md");
-
-            const content = await fs.readFile(taskPath, "utf8");
-            const lines = content.split('\n');
-            let updateCount = 0;
-
-            for (const update of updates) {
-                const statusChar = update.status === 'complete' ? 'x' :
-                    update.status === 'in-progress' ? '/' : ' ';
-
-                for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].includes(update.taskText) && lines[i].match(/- \[[ x/]\]/)) {
-                        lines[i] = lines[i].replace(/- \[[ x/]\]/, `- [${statusChar}]`);
-                        updateCount++;
-                        break;
-                    }
-                }
-            }
-
-            if (updateCount > 0) {
-                await fs.writeFile(taskPath, lines.join('\n'), "utf8");
-            }
-
-            return { ok: true, updateCount };
-        } catch (err) {
-            console.error("[task:updateMultiple error]", err);
-            return { ok: false, error: err.message };
         }
     });
 
