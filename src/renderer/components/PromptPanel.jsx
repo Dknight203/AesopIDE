@@ -108,6 +108,14 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
                         if (!path) {
                             if (call.tool.includes('Task')) path = '.aesop/task.md';
                             if (call.tool.includes('Plan')) path = '.aesop/implementation_plan.md';
+                        } else {
+                            // If path is provided but missing .aesop prefix for task files, add it
+                            if ((path === 'task.md' || path === '/task.md') && call.tool.includes('Task')) {
+                                path = '.aesop/task.md';
+                            }
+                            if ((path === 'implementation_plan.md' || path === '/implementation_plan.md') && call.tool.includes('Plan')) {
+                                path = '.aesop/implementation_plan.md';
+                            }
                         }
 
                         if (path && onOpenFile) {
