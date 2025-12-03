@@ -104,4 +104,40 @@ registerTool({
   }
 });
 
+// Task Management Tools
+registerTool({
+  name: 'createTask',
+  description: 'Create a new task.md file with structured tasks',
+  params: {
+    taskData: { type: 'object', required: true }
+  },
+  fn: async ({ taskData }) => {
+    if (!window.aesop || !window.aesop.task) throw new Error('Task API not available');
+    return await window.aesop.task.create(taskData);
+  }
+});
+
+registerTool({
+  name: 'readTask',
+  description: 'Read the current task.md file',
+  params: {},
+  fn: async () => {
+    if (!window.aesop || !window.aesop.task) throw new Error('Task API not available');
+    return await window.aesop.task.read();
+  }
+});
+
+registerTool({
+  name: 'updateTask',
+  description: 'Update a task status (pending/in-progress/complete)',
+  params: {
+    taskText: { type: 'string', required: true },
+    status: { type: 'string', required: true }
+  },
+  fn: async ({ taskText, status }) => {
+    if (!window.aesop || !window.aesop.task) throw new Error('Task API not available');
+    return await window.aesop.task.update(taskText, status);
+  }
+});
+
 export default { registerTool, getTool, listTools, executeTool };

@@ -25,6 +25,12 @@ You can use the following tools by outputting a JSON block with the tool name an
    - params: { "pattern": "*.tsx" }
 6. **runCommand**: Execute a shell command.
    - params: { "cmd": "npm test" }
+7. **createTask**: Create a new task.md file to track work.
+   - params: { "taskData": { "title": "Task Title", "sections": [...] } }
+8. **readTask**: Read the current task.md file.
+   - params: {}
+9. **updateTask**: Update a task's status.
+   - params: { "taskText": "Task description", "status": "complete" }
 
 ### INTERACTION RULES
 

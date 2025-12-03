@@ -33,6 +33,13 @@ contextBridge.exposeInMainWorld("aesop", {
             }),
     },
 
+    task: {
+        create: (taskData) => ipcRenderer.invoke("task:create", { taskData }),
+        read: () => ipcRenderer.invoke("task:read"),
+        update: (taskText, status) => ipcRenderer.invoke("task:update", { taskText, status }),
+        updateMultiple: (updates) => ipcRenderer.invoke("task:updateMultiple", { updates }),
+    },
+
     supabase: {
         test: () => ipcRenderer.invoke("supabase:test"),
     },

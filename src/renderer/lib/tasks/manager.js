@@ -1,0 +1,260 @@
+// src/renderer/lib/tasks/manager.js
+
+/**
+ * Task Management System
+ * Allows AI to create, update, and track tasks in markdown format
+ */
+
+/**
+ * Parse a task.md file and return structured data
+ * @param {string} content - Raw markdown content
+ * @returns {Array} Array of task objects with hierarchy
+ */
+export function parseTaskFile(content) {
+    if (!content || typeof content !== 'string') return [];
+
+    const lines = content.split('\n');
+    const tasks = [];
+    let currentSection = null;
+    let currentSubsection = null;
+
+    for (const line of lines) {
+        // Section header (## Phase X)
+        if (line.startsWith('## ')) {
+            currentSection = {
+                type: 'section',
+                title: line.replace('## ', '').trim(),
+                tasks: [],
+                subsections: []
+            };
+            tasks.push(currentSection);
+            currentSubsection = null;
+            continue;
+        }
+
+        // Subsection header (### X.X)
+        if (line.startsWith('### ')) {
+            if (currentSection) {
+                currentSubsection = {
+                    type: 'subsection',
+                    title: line.replace('### ', '').trim(),
+                    tasks: []
+                };
+                currentSection.subsections.push(currentSubsection);
+            }
+            continue;
+        }
+
+        // Task item (- [ ] or - [x] or - [/])
+        const taskMatch = line.match(/^(\s*)- \[([ x/])\] (.+)$/);
+        if (taskMatch) {
+            const indent = taskMatch[1].length;
+            const status = taskMatch[2];
+            const text = taskMatch[3];
+
+            const task = {
+                type: 'task',
+                indent,
+                status: status === 'x' ? 'complete' : status === '/' ? 'in-progress' : 'pending',
+                text,
+                raw: line
+            };
+
+            if (currentSubsection) {
+                currentSubsection.tasks.push(task);
+            } else if (currentSection) {
+                currentSection.tasks.push(task);
+            }
+        }
+    }
+
+    return tasks;
+}
+
+/**
+ * Calculate task progress statistics
+ * @param {Array} tasks - Parsed task structure
+ * @returns {Object} Progress statistics
+ */
+export function getTaskProgress(tasks) {
+    let total = 0;
+    let completed = 0;
+    let inProgress = 0;
+
+    function countTasks(items) {
+        for (const item of items) {
+            if (item.type === 'task') {
+                total++;
+                if (item.status === 'complete') completed++;
+                if (item.status === 'in-progress') inProgress++;
+            } else if (item.subsections) {
+                for (const sub of item.subsections) {
+                    countTasks(sub.tasks);
+                }
+            } else if (item.tasks) {
+                countTasks(item.tasks);
+            }
+        }
+    }
+
+    countTasks(tasks);
+
+    return {
+        total,
+        completed,
+        inProgress,
+        pending: total - completed - inProgress,
+        percentage: total > 0 ? Math.round((completed / total) * 100) : 0
+    };
+}
+
+/**
+ * Create a new task.md file
+ * @param {string} projectPath - Path to project root
+ * @param {Object} taskData - Task structure
+ * @returns {Promise<string>} Path to created file
+ */
+export async function createTaskFile(projectPath, taskData) {
+    const { title, sections } = taskData;
+
+    let markdown = `# ${title}\n\n`;
+
+    for (const section of sections) {
+        markdown += `## ${section.title}\n\n`;
+
+        for (const subsection of section.subsections || []) {
+            markdown += `### ${subsection.title}\n`;
+
+            for (const task of subsection.tasks || []) {
+                const indent = '  '.repeat(task.indent || 0);
+                const checkbox = task.status === 'complete' ? '[x]' :
+                    task.status === 'in-progress' ? '[/]' : '[ ]';
+                markdown += `${indent}- ${checkbox} ${task.text}\n`;
+            }
+
+            markdown += '\n';
+        }
+    }
+
+    // Write to .aesop/task.md
+    const taskPath = `${projectPath}/.aesop/task.md`;
+
+    try {
+        // Ensure .aesop directory exists
+        await window.aesop.fs.mkdir(`${projectPath}/.aesop`);
+    } catch (err) {
+        // Directory might already exist, ignore
+    }
+
+    await window.aesop.fs.writeFile(taskPath, markdown);
+    return taskPath;
+}
+
+/**
+ * Read existing task.md file
+ * @param {string} projectPath - Path to project root
+ * @returns {Promise<string>} Task file content
+ */
+export async function readTaskFile(projectPath) {
+    const taskPath = `${projectPath}/.aesop/task.md`;
+    try {
+        const content = await window.aesop.fs.readFile(taskPath);
+        return content;
+    } catch (err) {
+        return null; // File doesn't exist
+    }
+}
+
+/**
+ * Update task status in task.md
+ * @param {string} projectPath - Path to project root
+ * @param {string} taskText - Text of the task to update
+ * @param {string} newStatus - New status ('pending', 'in-progress', 'complete')
+ * @returns {Promise<boolean>} Success status
+ */
+export async function updateTaskStatus(projectPath, taskText, newStatus) {
+    const content = await readTaskFile(projectPath);
+    if (!content) return false;
+
+    const statusChar = newStatus === 'complete' ? 'x' :
+        newStatus === 'in-progress' ? '/' : ' ';
+
+    // Find and replace the task line
+    const lines = content.split('\n');
+    let updated = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(taskText) && lines[i].match(/- \[[ x/]\]/)) {
+            lines[i] = lines[i].replace(/- \[[ x/]\]/, `- [${statusChar}]`);
+            updated = true;
+            break;
+        }
+    }
+
+    if (updated) {
+        const taskPath = `${projectPath}/.aesop/task.md`;
+        await window.aesop.fs.writeFile(taskPath, lines.join('\n'));
+    }
+
+    return updated;
+}
+
+/**
+ * Update multiple tasks at once
+ * @param {string} projectPath - Path to project root
+ * @param {Array} updates - Array of {taskText, status} objects
+ * @returns {Promise<number>} Number of tasks updated
+ */
+export async function updateMultipleTasks(projectPath, updates) {
+    const content = await readTaskFile(projectPath);
+    if (!content) return 0;
+
+    const lines = content.split('\n');
+    let updateCount = 0;
+
+    for (const update of updates) {
+        const statusChar = update.status === 'complete' ? 'x' :
+            update.status === 'in-progress' ? '/' : ' ';
+
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes(update.taskText) && lines[i].match(/- \[[ x/]\]/)) {
+                lines[i] = lines[i].replace(/- \[[ x/]\]/, `- [${statusChar}]`);
+                updateCount++;
+                break;
+            }
+        }
+    }
+
+    if (updateCount > 0) {
+        const taskPath = `${projectPath}/.aesop/task.md`;
+        await window.aesop.fs.writeFile(taskPath, lines.join('\n'));
+    }
+
+    return updateCount;
+}
+
+/**
+ * Get current task being worked on (first in-progress task)
+ * @param {Array} tasks - Parsed task structure
+ * @returns {Object|null} Current task or null
+ */
+export function getCurrentTask(tasks) {
+    function findInProgress(items) {
+        for (const item of items) {
+            if (item.type === 'task' && item.status === 'in-progress') {
+                return item;
+            } else if (item.subsections) {
+                for (const sub of item.subsections) {
+                    const found = findInProgress(sub.tasks);
+                    if (found) return found;
+                }
+            } else if (item.tasks) {
+                const found = findInProgress(item.tasks);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+
+    return findInProgress(tasks);
+}
