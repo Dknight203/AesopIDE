@@ -8,7 +8,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
 // CRITICAL FIX: Simplest, most stable CommonJS import for nanoid to prevent crash
-const nanoid = require('nanoid/non-secure'); 
+const nanoid = require('nanoid/non-secure');
 
 // Track current project root (folder opened in the IDE)
 let currentRoot = process.cwd();
@@ -215,7 +215,7 @@ function registerIpcHandlers() {
         await fs.mkdir(fullPath, { recursive: true });
         return { ok: true, path: relPath };
     });
-    
+
     // ---------------------------------------------------------------------------
     // PHASE 4.1: CONVERSATION HISTORY
     // ---------------------------------------------------------------------------
@@ -223,7 +223,7 @@ function registerIpcHandlers() {
     ipcMain.handle("history:save", async (event, messages) => {
         const root = ensureRoot();
         const historyPath = path.join(root, ".aesop", "history.json");
-        
+
         try {
             // Ensure .aesop directory exists
             const dir = path.dirname(historyPath);
@@ -254,20 +254,20 @@ function registerIpcHandlers() {
         try {
             const content = await fs.readFile(historyPath, "utf8");
             const messages = JSON.parse(content);
-            
+
             // Convert ISO strings back to Date objects
             const deserializedMessages = messages.map(msg => ({
                 ...msg,
                 timestamp: new Date(msg.timestamp)
             }));
-            
+
             return { ok: true, messages: deserializedMessages };
         } catch (err) {
             console.error("[AesopIDE history:load error]", err);
             return { ok: false, error: err.message || String(err) };
         }
     });
-    
+
     // ---------------------------------------------------------------------------
     // PHASE 4.2: PROJECT MEMORY
     // ---------------------------------------------------------------------------
@@ -306,6 +306,76 @@ function registerIpcHandlers() {
             return { ok: false, error: err.message || String(err) };
         }
     });
+    // ---------------------------------------------------------------------------
+    // PROMPT (Gemini) - used by the AI prompt window
+    // ---------------------------------------------------------------------------
+
+    ipcMain.handle("prompt:send", async (event, payloadOrText, maybeOptions = {}) => {
+        try {
+            const model = getGeminiModel();
+
+            let systemPrompt = "";
+            let userPrompt = "";
+            let fileContext = null;
+            let cursor = null;
+            let history = [];
+
+            if (typeof payloadOrText === "string" || payloadOrText instanceof String) {
+                userPrompt = payloadOrText;
+                if (maybeOptions && typeof maybeOptions === "object") {
+                    systemPrompt = maybeOptions.systemPrompt || "";
+                    fileContext = maybeOptions.fileContext || null;
+                    cursor = maybeOptions.cursor || null;
+                    history = maybeOptions.history || [];
+                }
+            } else if (payloadOrText && typeof payloadOrText === "object") {
+                userPrompt = payloadOrText.prompt || "";
+                systemPrompt = payloadOrText.systemPrompt || "";
+                fileContext = payloadOrText.fileContext || null;
+                cursor = payloadOrText.cursor || null;
+                history = payloadOrText.history || [];
+            }
+
+            const parts = [];
+            if (systemPrompt) {
+                parts.push({ text: systemPrompt + "\n\n" });
+            }
+            if (fileContext) {
+                parts.push({ text: "Project context:\n" + fileContext + "\n\n" });
+            }
+            if (cursor) {
+                parts.push({ text: "Cursor context:\n" + cursor + "\n\n" });
+            }
+            parts.push({ text: userPrompt });
+
+            const contents = [];
+            if (history && history.length > 0) {
+                for (const msg of history) {
+                    if (msg.role === 'user' || msg.role === 'assistant') {
+                        contents.push({
+                            role: msg.role === 'assistant' ? 'model' : 'user',
+                            parts: [{ text: msg.content }]
+                        });
+                    }
+                }
+            }
+
+            contents.push({
+                role: "user",
+                parts,
+            });
+
+            const result = await model.generateContent({ contents });
+            const response = result.response;
+            const outText = typeof response.text === "function" ? response.text() : "";
+
+            return { ok: true, text: outText };
+        } catch (err) {
+            console.error("[AesopIDE prompt:send error]", err);
+            return { ok: false, text: err.message || String(err) };
+        }
+    });
+
 
     // ---------------------------------------------------------------------------
     // GIT using simple-git
@@ -315,7 +385,7 @@ function registerIpcHandlers() {
         const baseDir = ensureRoot();
         return simpleGit({ baseDir });
     }
-    
+
     // PHASE 5.1: New Git Command
     ipcMain.handle("git:diff", async () => {
         try {
@@ -328,13 +398,13 @@ function registerIpcHandlers() {
             return { ok: false, error: err.message || String(err) };
         }
     });
-    
+
     // PHASE 5.1: New Git Command
     ipcMain.handle("git:applyPatch", async (event, patchContent) => {
         const root = ensureRoot();
         // CRITICAL FIX: Call nanoid as a function here
         const tempPatchPath = path.join(root, '.aesop', `patch-${nanoid()}.patch`);
-        
+
         try {
             // Write the patch content to the temp file
             await fs.writeFile(tempPatchPath, patchContent, 'utf8');
@@ -346,19 +416,19 @@ function registerIpcHandlers() {
 
             // Clean up the temporary file
             await fs.unlink(tempPatchPath);
-            
+
             return { ok: true, output: result.summary || 'Patch applied successfully.' };
 
         } catch (err) {
             try {
                 // Attempt to clean up the file even if applying failed
-                await fs.unlink(tempPatchPath).catch(() => {});
-            } catch {}
-            
+                await fs.unlink(tempPatchPath).catch(() => { });
+            } catch { }
+
             console.error("[AesopIDE git:applyPatch error]", err);
             // Check for specific Git conflict message
             if (err.message && err.message.includes('conflicts')) {
-                 return { ok: false, error: 'Patch application failed: CONFLICTS detected. User must manually resolve.' };
+                return { ok: false, error: 'Patch application failed: CONFLICTS detected. User must manually resolve.' };
             }
             return { ok: false, error: err.message || String(err) };
         }
@@ -426,16 +496,16 @@ function registerIpcHandlers() {
         const root = ensureRoot();
         // CRITICAL FIX: Call nanoid as a function here
         const commandId = nanoid();
-        
+
         if (!command || typeof command !== "string") {
             return { ok: false, error: "Command string required." };
         }
-        
+
         // Split command and arguments (simple approach for now)
         const parts = command.split(/\s+/).filter(p => p.length > 0);
         const cmd = parts[0];
         const args = parts.slice(1);
-        
+
         // Initialize output buffer for this command
         commandOutput.set(commandId, `> ${command}\n`);
         const processStartTime = new Date();
@@ -463,7 +533,7 @@ function registerIpcHandlers() {
 
             activeCommands.delete(commandId);
             const duration = new Date() - processStartTime;
-            
+
             commandOutput.set(commandId, commandOutput.get(commandId) + `\n[Command finished in ${duration}ms with exit code ${exitCode}]`);
 
             return { ok: true, id: commandId, output: commandOutput.get(commandId), exitCode };
@@ -478,7 +548,7 @@ function registerIpcHandlers() {
         if (!commandId || !commandOutput.has(commandId)) {
             return { ok: false, error: "Command ID not found or output cleared." };
         }
-        
+
         return { ok: true, output: commandOutput.get(commandId) };
     });
 
@@ -486,14 +556,14 @@ function registerIpcHandlers() {
         if (!commandId || !activeCommands.has(commandId)) {
             return { ok: false, error: "Command ID not found or already finished." };
         }
-        
+
         const child = activeCommands.get(commandId);
         child.kill();
         activeCommands.delete(commandId);
-        
+
         const output = commandOutput.get(commandId) + `\n[Command ${commandId} manually terminated.]`;
         commandOutput.set(commandId, output);
-        
+
         return { ok: true, output: output };
     });
 
