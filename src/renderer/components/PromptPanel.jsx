@@ -97,12 +97,22 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
                 try {
                     const result = await executeTool(call.tool, call.params);
 
-                    // Auto-open file if created
-                    if (call.tool === 'createTask' || call.tool === 'createPlan' || call.tool === 'writeFile') {
-                        if (result && result.path && onApplyCode) {
-                            // We use onApplyCode as a proxy to open files since it likely has access to app state
-                            // Or better, we should pass an onOpenFile prop
-                            // For now, let's assume the result message will prompt the user or we can try to trigger it
+                    // Auto-open file if created or read
+                    if (['createTask', 'readTask', 'createPlan', 'readPlan', 'writeFile', 'readFile'].includes(call.tool)) {
+                        // Determine path from result or params
+                        let path = null;
+                        if (result && result.path) path = result.path;
+                        else if (call.params && call.params.path) path = call.params.path;
+
+                        // Special case for task/plan tools that imply a specific path
+                        if (!path) {
+                            if (call.tool.includes('Task')) path = '.aesop/task.md';
+                            if (call.tool.includes('Plan')) path = '.aesop/implementation_plan.md';
+                        }
+
+                        if (path && onOpenFile) {
+                            // Small delay to ensure file exists on disk before opening
+                            setTimeout(() => onOpenFile(path), 100);
                         }
                     }
 

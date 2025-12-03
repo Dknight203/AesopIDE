@@ -419,6 +419,7 @@ export default function App() {
                     <PromptPanel
                         onClose={() => setPromptOpen(false)}
                         onApplyCode={handleApplyCode}
+                        onOpenFile={openFile}
                         activeTab={activeTab}
                         rootPath={rootPath}
                         codebaseIndex={codebaseIndex}
