@@ -7,7 +7,9 @@ import { buildFileContext } from "../lib/codebase/context";
 import parseToolCalls from "../lib/ai/toolParser";
 import { executeTool } from "../lib/tools/framework";
 
-export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath, codebaseIndex }) {
+
+// UPDATED PROPS: Added onOpenCommand
+export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activeTab, rootPath, codebaseIndex }) {
     const [messages, setMessages] = useState([
         {
             role: "assistant",
@@ -28,11 +30,49 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
     useEffect(() => {
         inputRef.current?.focus();
     }, []);
+    
+    // NEW HELPER: For consistent message logging in the chat
+    const appendMessage = (role, content) => {
+        const newMessage = {
+            role,
+            content,
+            timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, newMessage]);
+    };
 
     async function handleSend() {
         if (!input.trim() || isLoading) return;
 
         const text = input;
+        
+        // -----------------------------------------------------------
+        // NEW LOGIC START: INTERCEPT RENDERER-SIDE OPEN COMMANDS
+        // -----------------------------------------------------------
+        const OPEN_COMMAND_REGEX = /^(?:bring up|open|show|display)\s+(.+?)$/i;
+        const match = text.trim().match(OPEN_COMMAND_REGEX);
+
+        if (match && onOpenCommand) {
+            // Extract the token (the 'X' in "bring up X") and clean up any trailing "file" or "files"
+            const token = match[1].trim().replace(/\s+file(s)?$/i, '').trim(); 
+            
+            // 1. Display user message immediately
+            appendMessage("user", text);
+            setInput("");
+            setIsLoading(true);
+
+            // 2. Execute the multi-step open command logic in App.jsx
+            // onOpenCommand handles findFiles, readFile, setActivePath, and appends the final clean message
+            await onOpenCommand(token, appendMessage);
+            
+            setIsLoading(false);
+            return; // EXIT: Command handled, prevent sending to AI.
+        }
+        // -----------------------------------------------------------
+        // NEW LOGIC END
+        // -----------------------------------------------------------
+
+
         const userMessage = {
             role: "user",
             content: text,
@@ -58,6 +98,7 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
         }
     }
 
+
     async function processAiTurn(userPrompt, history) {
         // Build context
         let fileContext = "";
@@ -68,13 +109,13 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
             });
         }
 
+
         // 1. Send to AI
         const reply = await askGemini(userPrompt, {
             systemPrompt: SYSTEM_PROMPT,
             fileContext,
             // TODO: Pass history if askGemini supports it, currently it seems stateless per call
         });
-
         const aiMessage = {
             role: "assistant",
             content: reply,
@@ -82,11 +123,15 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
         };
         setMessages((prev) => [...prev, aiMessage]);
 
+
         // 2. Check for tool calls
         const toolCalls = parseToolCalls(reply);
         if (toolCalls.length > 0) {
             // Execute tools
             for (const call of toolCalls) {
+                // Check if tool is one we want to suppress verbose JSON output for
+                const isFileOp = ['writeFile', 'readFile', 'findFiles', 'createTask', 'readTask', 'createPlan', 'readPlan'].includes(call.tool);
+                
                 const toolMsg = {
                     role: "tool",
                     content: `Executing tool: ${call.tool}...`,
@@ -94,16 +139,17 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
                 };
                 setMessages(prev => [...prev, toolMsg]);
 
+
                 try {
                     const result = await executeTool(call.tool, call.params);
-
-                    // Auto-open file if created or read
+                    
+                    // Auto-open file if created or read (Existing logic, modified for clarity)
                     if (['createTask', 'readTask', 'createPlan', 'readPlan', 'writeFile', 'readFile'].includes(call.tool)) {
                         // Determine path from result or params
                         let path = null;
                         if (result && result.path) path = result.path;
                         else if (call.params && call.params.path) path = call.params.path;
-
+                        
                         // Special case for task/plan tools that imply a specific path
                         if (!path) {
                             if (call.tool.includes('Task')) path = '.aesop/task.md';
@@ -118,30 +164,47 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
                             }
                         }
 
-                        if (path && onOpenFile) {
-                            // Small delay to ensure file exists on disk before opening
-                            setTimeout(() => onOpenFile(path), 100);
+
+                        // onOpenFile is NOT passed to PromptPanel, but handleApplyCode's openFileByPath achieves the same goal
+                        if (path && onApplyCode) { 
+                            // Simulate the open action by passing a dummy AI response to onApplyCode
+                            setTimeout(() => onApplyCode(`AesopIDE open file: ${path}`), 100);
                         }
                     }
 
-                    const resultMsg = {
-                        role: "tool_result",
-                        content: `Tool '${call.tool}' output:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``,
-                        timestamp: new Date()
-                    };
+
+                    // -----------------------------------------------------------
+                    // NEW LOGIC: TOOL RESULT SUPPRESSION
+                    // -----------------------------------------------------------
+                    let resultMsg;
+                    if (isFileOp) {
+                        // Hide raw JSON for core file/plan operations (Fix 2)
+                        resultMsg = {
+                            role: "tool_result",
+                            content: `Tool **'${call.tool}'** executed successfully.`,
+                            timestamp: new Date()
+                        };
+                    } else {
+                        // Keep verbose JSON for other tools (like complex file search or git commands)
+                        resultMsg = {
+                            role: "tool_result",
+                            content: `Tool '${call.tool}' output:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``,
+                            timestamp: new Date()
+                        };
+                    }
                     setMessages(prev => [...prev, resultMsg]);
+                    // -----------------------------------------------------------
+
 
                     // 3. Send result back to AI (recursive)
                     // For now, we just append the result to the prompt and ask AI to continue
                     const followUpPrompt = `Tool '${call.tool}' returned:\n${JSON.stringify(result, null, 2)}\n\nPlease continue based on this result.`;
-
                     // Recursive call to process the tool result
                     // Note: In a real chat system we'd append to history, but here we just chain calls
                     const followUpReply = await askGemini(followUpPrompt, {
                         systemPrompt: SYSTEM_PROMPT,
                         fileContext,
                     });
-
                     const followUpMsg = {
                         role: "assistant",
                         content: followUpReply,
@@ -149,8 +212,10 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
                     };
                     setMessages(prev => [...prev, followUpMsg]);
 
+
                     // Check if follow-up has more tools (limit recursion depth in real impl)
                     // For now, let's stop after one level to prevent loops
+
 
                 } catch (err) {
                     const errorMsg = {
@@ -163,11 +228,13 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
             }
         }
 
+
         // Auto-apply if applicable (only for the final reply, but here we check the first one too)
         if (hasActionableContent(reply) && onApplyCode) {
             setTimeout(() => onApplyCode(reply), 100);
         }
     }
+
 
     function handleKeyDown(e) {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -176,30 +243,37 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
         }
     }
 
+
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text);
     }
 
+
     // Check if AI message contains actionable content (code blocks or file commands)
     function hasActionableContent(content) {
         if (!content || typeof content !== "string") return false;
+
 
         // Check for file commands
         if (content.match(/AesopIDE (target|open) file:/i)) {
             return true;
         }
 
+
         // Check for fenced code blocks
         if (content.match(/```[\\s\\S]*?```/)) {
             return true;
         }
 
+
         return false;
     }
+
 
     // Render message content with clickable file links
     function renderMessageContent(content) {
         if (!content || typeof content !== "string") return content;
+
 
         // Pattern to match file paths (e.g., src/components/Header.tsx)
         const filePathPattern = /((?:[\w-]+\/)*[\w-]+\.\w+)/g;
@@ -207,11 +281,13 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
         let lastIndex = 0;
         let match;
 
+
         while ((match = filePathPattern.exec(content)) !== null) {
             // Add text before the match
             if (match.index > lastIndex) {
                 parts.push(content.substring(lastIndex, match.index));
             }
+
 
             // Add clickable file link
             const filePath = match[1];
@@ -230,54 +306,61 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
                     {filePath}
                 </span>
             );
-
             lastIndex = match.index + match[0].length;
         }
+
 
         // Add remaining text
         if (lastIndex < content.length) {
             parts.push(content.substring(lastIndex));
         }
 
+
         return parts.length > 0 ? parts : content;
     }
+
 
     function renderMessage(message, index) {
         const isUser = message.role === "user";
         const isTool = message.role === "tool";
         const isToolResult = message.role === "tool_result";
         const isToolError = message.role === "tool_error";
-
+        
         let roleLabel = "🤖 Assistant";
         if (isUser) roleLabel = "👤 You";
         if (isTool) roleLabel = "🛠️ Tool";
         if (isToolResult) roleLabel = "📝 Result";
         if (isToolError) roleLabel = "⚠️ Error";
-
+        
         // Parse tool content if it's a tool call
         let displayContent = message.content;
         if (isTool) {
-            try {
-                // Try to extract tool name from JSON
-                const toolData = JSON.parse(message.content);
-                if (toolData.tool) {
-                    displayContent = `Executing tool: ${toolData.tool}...`;
-                }
-            } catch (e) {
-                // If parsing fails, just show truncated content
-                if (displayContent.length > 100) {
-                    displayContent = displayContent.substring(0, 100) + "...";
-                }
+            // We just set this message when calling the tool in handleSend, so no parsing needed
+        }
+        
+        // Clean up tool result content for display in the chat window
+        if (isToolResult) {
+            // Check if it's the suppressed message we added in processAiTurn
+            if (displayContent.startsWith("Tool **")) {
+                // Keep the clean message
+            } else {
+                // If it's a full JSON dump (e.g., from git status), just show a summary
+                displayContent = `Tool result received.`;
             }
         }
 
-        const messageClass = `message ${isUser ? "message-user" :
-            isTool ? "message-tool" :
-                isToolResult ? "message-tool_result" :
-                    isToolError ? "message-tool_error" :
+
+        const messageClass = `message ${isUser ?
+            "message-user" :
+            isTool ?
+                "message-tool" :
+                isToolResult ?
+                    "message-tool_result" :
+                    isToolError ?
+                        "message-tool_error" :
                         "message-assistant"
             }`;
-
+        
         return (
             <div key={index} className={messageClass}>
                 <div className="message-header">
@@ -316,18 +399,21 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
         );
     }
 
+
     return (
         <div className="prompt-panel">
             <div className="prompt-header">
                 <div className="prompt-header-left">
                     <span className="prompt-title">✨ AI Assistant</span>
                 </div>
-                <div className="prompt-header-right">
+                <div 
+                    className="prompt-header-right">
                     <button className="prompt-close-btn" onClick={onClose} title="Close">
                         ✕
                     </button>
                 </div>
             </div>
+
 
             <div className="prompt-messages scrollable">
                 {messages.map((msg, idx) => renderMessage(msg, idx))}
@@ -347,6 +433,7 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
                 )}
                 <div ref={messagesEndRef} />
             </div>
+
 
             <div className="prompt-input-area">
                 <textarea

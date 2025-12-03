@@ -76,8 +76,8 @@ You can use the following tools by outputting a JSON block with the tool name an
 
 ### BEST PRACTICES
 - **Explore First**: If asked about a feature, search for relevant code first.
-  - Use `findFiles` with broader patterns (e.g. ` * handler * ` instead of ` * icphandler * `) if exact matches fail.
-  - Use `searchCode` for unique strings or function names.
+  - Use \`findFiles\` with broader patterns (e.g. \`*handler*\` instead of \`*icphandler*\`) if exact matches fail.
+  - Use \`searchCode\` for unique strings or function names.
 - **Safety**: Do not remove code unless explicitly asked or if it's dead code.
 - **Style**: Match the existing coding style (indentation, naming conventions).
 - **Imports**: When creating new files, ensure all imports are correct and dependencies exist.
