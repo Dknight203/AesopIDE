@@ -7,7 +7,8 @@ const simpleGit = require("simple-git");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
-const nanoid = require('nanoid/non-secure').nanoid; 
+// CRITICAL FIX: Simplest, most stable CommonJS import for nanoid to prevent crash
+const nanoid = require('nanoid/non-secure'); 
 
 // Track current project root (folder opened in the IDE)
 let currentRoot = process.cwd();
@@ -331,8 +332,8 @@ function registerIpcHandlers() {
     // PHASE 5.1: New Git Command
     ipcMain.handle("git:applyPatch", async (event, patchContent) => {
         const root = ensureRoot();
-        // Create a temporary file to hold the patch content
-        const tempPatchPath = path.join(root, '.aesop', `patch-${nanoid(5)}.patch`);
+        // CRITICAL FIX: Call nanoid as a function here
+        const tempPatchPath = path.join(root, '.aesop', `patch-${nanoid()}.patch`);
         
         try {
             // Write the patch content to the temp file
@@ -410,10 +411,10 @@ function registerIpcHandlers() {
         try {
             const git = getGit();
             const result = await git.pull();
-            return { ok: true, output: JSON.stringify(result) };
+            return { ok: true, output: JSON.stringify(result) || result.summary.summary };
         } catch (err) {
             console.error("[AesopIDE git:pull error]", err);
-            return { ok: false, output: JSON.stringify(err) || String(err) }; // Ensure error is properly handled
+            return { ok: false, output: JSON.stringify(err) || String(err) };
         }
     });
 
@@ -423,7 +424,8 @@ function registerIpcHandlers() {
 
     ipcMain.handle("cmd:run", async (event, command) => {
         const root = ensureRoot();
-        const commandId = nanoid(10);
+        // CRITICAL FIX: Call nanoid as a function here
+        const commandId = nanoid();
         
         if (!command || typeof command !== "string") {
             return { ok: false, error: "Command string required." };

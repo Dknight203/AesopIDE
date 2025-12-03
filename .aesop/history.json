@@ -1,0 +1,107 @@
+[
+  {
+    "role": "assistant",
+    "content": "Hello. I am your AI assistant inside AesopIDE. Ask me about your code or project and I will help.",
+    "timestamp": "2025-12-03T09:35:15.808Z"
+  },
+  {
+    "role": "user",
+    "content": "In the Prompt Panel, type: bring up TopBar.jsx",
+    "timestamp": "2025-12-03T09:35:53.966Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Error: Error invoking remote method 'prompt:send': Error: No handler registered for 'prompt:send'",
+    "timestamp": "2025-12-03T09:35:53.976Z"
+  },
+  {
+    "role": "user",
+    "content": "bring up TopBar.jsx",
+    "timestamp": "2025-12-03T09:40:21.711Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Opened file: **src/renderer/components/TopBar.jsx**",
+    "timestamp": "2025-12-03T09:40:21.739Z"
+  },
+  {
+    "role": "user",
+    "content": "show an unknown file name",
+    "timestamp": "2025-12-03T09:40:35.211Z"
+  },
+  {
+    "role": "assistant",
+    "content": "File not found: Could not locate a file matching **an unknown file name**.",
+    "timestamp": "2025-12-03T09:40:35.213Z"
+  },
+  {
+    "role": "user",
+    "content": "Can you write \"hello\" into a new file called test.txt at the project root?",
+    "timestamp": "2025-12-03T09:42:00.762Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Error: Error invoking remote method 'prompt:send': Error: No handler registered for 'prompt:send'",
+    "timestamp": "2025-12-03T09:42:00.767Z"
+  },
+  {
+    "role": "user",
+    "content": "Can you write \"hello\" into a new file called test.txt at the project root?",
+    "timestamp": "2025-12-03T09:44:45.326Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Error: Error invoking remote method 'prompt:send': Error: No handler registered for 'prompt:send'",
+    "timestamp": "2025-12-03T09:44:45.335Z"
+  },
+  {
+    "role": "user",
+    "content": "bring up TopBar.jsx",
+    "timestamp": "2025-12-03T09:45:00.367Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Opened file: **src/renderer/components/TopBar.jsx**",
+    "timestamp": "2025-12-03T09:45:00.374Z"
+  },
+  {
+    "role": "user",
+    "content": "bring up TopBar.jsx",
+    "timestamp": "2025-12-03T09:47:24.790Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Opened file: **src/renderer/components/TopBar.jsx**",
+    "timestamp": "2025-12-03T09:47:24.799Z"
+  },
+  {
+    "role": "user",
+    "content": "Can you write \"hello\" into a new file called test.txt at the project root?",
+    "timestamp": "2025-12-03T09:47:34.882Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Error: Error invoking remote method 'prompt:send': Error: No handler registered for 'prompt:send'",
+    "timestamp": "2025-12-03T09:47:34.895Z"
+  },
+  {
+    "role": "user",
+    "content": "Can you write \"hello\" into a new file called test.txt at the project root?",
+    "timestamp": "2025-12-03T09:50:08.195Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Error: Error invoking remote method 'prompt:send': Error: No handler registered for 'prompt:send'",
+    "timestamp": "2025-12-03T09:50:08.205Z"
+  },
+  {
+    "role": "user",
+    "content": "Can you write \"hello\" into a new file called test.txt at the project root?",
+    "timestamp": "2025-12-03T09:52:23.247Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Error: Error invoking remote method 'prompt:send': Error: No handler registered for 'prompt:send'",
+    "timestamp": "2025-12-03T09:52:23.257Z"
+  }
+]
