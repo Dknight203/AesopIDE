@@ -29,6 +29,9 @@ export default function App() {
     const [promptOpen, setPromptOpen] = useState(false);
     const [statusMessage, setStatusMessage] = useState("");
 
+    // NEW STATE: For pre-filling the prompt input
+    const [initialPrompt, setInitialPrompt] = useState("");
+
     // Phase 3.2 State: Stores content of the plan waiting for review
     const [planModalContent, setPlanModalContent] = useState(null);
 
@@ -372,7 +375,9 @@ export default function App() {
         setPromptOpen(true);
         // Hint the user/AI to start a planning task if the prompt is empty
         setStatusMessage("Planning Mode: Ask the AI to create an 'implementation_plan.md'.");
-        // Optionally inject text into the prompt input to start the process
+        
+        // ADDED: Set a starting prompt for a better user experience
+        setInitialPrompt("I need a plan to implement a new feature. Please create an 'implementation_plan.md' that details the steps.");
     }
 
     // -----------------------------------------------------------
@@ -591,9 +596,16 @@ export default function App() {
 
                 <div className={`app-right-sidebar ${!promptOpen ? "collapsed" : ""}`}>
                     <PromptPanel
-                        onClose={() => setPromptOpen(false)}
+                        onClose={() => {
+                            setPromptOpen(false);
+                            setInitialPrompt(""); // Clear any lingering initial prompt on close
+                        }}
                         onApplyCode={handleApplyCode}
                         onOpenCommand={autoOpenFileAndMessage}
+                        // NEW PROP: Pass the initial prompt state
+                        initialPrompt={initialPrompt}
+                        // NEW PROP: Pass the setter for clearing the initial prompt state
+                        onClearInitialPrompt={() => setInitialPrompt("")}
                         activeTab={activeTab}
                         rootPath={rootPath}
                         codebaseIndex={codebaseIndex}

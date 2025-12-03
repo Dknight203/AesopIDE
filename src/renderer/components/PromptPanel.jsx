@@ -8,7 +8,7 @@ import parseToolCalls from "../lib/ai/toolParser";
 import { executeTool } from "../lib/tools/framework";
 
 
-export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activeTab, rootPath, codebaseIndex }) {
+export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activeTab, rootPath, codebaseIndex, initialPrompt, onClearInitialPrompt }) {
     // Initialize state with a standard welcome message
     const initialMessage = {
         role: "assistant",
@@ -22,6 +22,19 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+
+    // NEW EFFECT: Handle initial prompt injection from the parent
+    useEffect(() => {
+        if (initialPrompt) {
+            setInput(initialPrompt);
+            inputRef.current?.focus();
+
+            // Clear the state in the parent component immediately after consumption
+            if (onClearInitialPrompt) {
+                onClearInitialPrompt();
+            }
+        }
+    }, [initialPrompt, onClearInitialPrompt]);
 
     // -----------------------------------------------------------
     // PHASE 4.1: HISTORY LOADING & SAVING
@@ -140,6 +153,10 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                 await window.aesop.history.save([initialMessage]);
             } catch (err) {
                 console.error("Failed to clear history:", err);
+            }
+            // ADDED: Clear any pending initial prompt when starting a new chat
+            if (onClearInitialPrompt) {
+                onClearInitialPrompt();
             }
         }
     }
