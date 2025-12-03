@@ -7,12 +7,12 @@ const simpleGit = require("simple-git");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
-const { nanoid } = require('nanoid');
+const nanoid = require('nanoid/non-secure').nanoid; 
 
 // Track current project root (folder opened in the IDE)
 let currentRoot = process.cwd();
 
-// NEW: Track active commands by ID
+// Track active commands by ID
 const activeCommands = new Map();
 const commandOutput = new Map();
 
@@ -266,7 +266,45 @@ function registerIpcHandlers() {
             return { ok: false, error: err.message || String(err) };
         }
     });
+    
+    // ---------------------------------------------------------------------------
+    // PHASE 4.2: PROJECT MEMORY
+    // ---------------------------------------------------------------------------
+    const PROJECT_MEMORY_FILE = "project_knowledge.json";
 
+    ipcMain.handle("memory:save", async (event, knowledge) => {
+        const root = ensureRoot();
+        const memoryPath = path.join(root, ".aesop", PROJECT_MEMORY_FILE);
+
+        try {
+            const dir = path.dirname(memoryPath);
+            await fs.mkdir(dir, { recursive: true });
+
+            await fs.writeFile(memoryPath, JSON.stringify(knowledge, null, 2), "utf8");
+            return { ok: true };
+        } catch (err) {
+            console.error("[AesopIDE memory:save error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
+
+    ipcMain.handle("memory:load", async () => {
+        const root = ensureRoot();
+        const memoryPath = path.join(root, ".aesop", PROJECT_MEMORY_FILE);
+
+        if (!fsSync.existsSync(memoryPath)) {
+            return { ok: true, knowledge: {} }; // Return empty object if file doesn't exist
+        }
+
+        try {
+            const content = await fs.readFile(memoryPath, "utf8");
+            const knowledge = JSON.parse(content);
+            return { ok: true, knowledge };
+        } catch (err) {
+            console.error("[AesopIDE memory:load error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
 
     // ---------------------------------------------------------------------------
     // GIT using simple-git
@@ -276,6 +314,55 @@ function registerIpcHandlers() {
         const baseDir = ensureRoot();
         return simpleGit({ baseDir });
     }
+    
+    // PHASE 5.1: New Git Command
+    ipcMain.handle("git:diff", async () => {
+        try {
+            const git = getGit();
+            // Get the diff of all uncommitted changes in the working directory
+            const diff = await git.diff();
+            return { ok: true, diff };
+        } catch (err) {
+            console.error("[AesopIDE git:diff error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
+    
+    // PHASE 5.1: New Git Command
+    ipcMain.handle("git:applyPatch", async (event, patchContent) => {
+        const root = ensureRoot();
+        // Create a temporary file to hold the patch content
+        const tempPatchPath = path.join(root, '.aesop', `patch-${nanoid(5)}.patch`);
+        
+        try {
+            // Write the patch content to the temp file
+            await fs.writeFile(tempPatchPath, patchContent, 'utf8');
+
+            // Apply the patch using simple-git
+            const git = getGit();
+            // Note: `apply` is a safer version of `patch`
+            const result = await git.applyPatch(tempPatchPath);
+
+            // Clean up the temporary file
+            await fs.unlink(tempPatchPath);
+            
+            return { ok: true, output: result.summary || 'Patch applied successfully.' };
+
+        } catch (err) {
+            try {
+                // Attempt to clean up the file even if applying failed
+                await fs.unlink(tempPatchPath).catch(() => {});
+            } catch {}
+            
+            console.error("[AesopIDE git:applyPatch error]", err);
+            // Check for specific Git conflict message
+            if (err.message && err.message.includes('conflicts')) {
+                 return { ok: false, error: 'Patch application failed: CONFLICTS detected. User must manually resolve.' };
+            }
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
+
 
     ipcMain.handle("git:status", async () => {
         try {
@@ -326,7 +413,7 @@ function registerIpcHandlers() {
             return { ok: true, output: JSON.stringify(result) };
         } catch (err) {
             console.error("[AesopIDE git:pull error]", err);
-            return { ok: false, output: err.message || String(err) };
+            return { ok: false, output: JSON.stringify(err) || String(err) }; // Ensure error is properly handled
         }
     });
 

@@ -20,19 +20,16 @@ export async function executeTool(toolName, params) {
         // -----------------------------------------------------------
         case 'readFile':
             if (!params.path) throw new Error("readFile requires a 'path' parameter.");
-            // Maps to window.aesop.fs.readFile which calls "fs:readFile" IPC
             const content = await window.aesop.fs.readFile(params.path);
             return { content, path: params.path };
 
         case 'writeFile':
             if (!params.path || typeof params.content === 'undefined') throw new Error("writeFile requires 'path' and 'content' parameters.");
-            // Maps to window.aesop.fs.writeFile which calls "fs:writeFile" IPC
             await window.aesop.fs.writeFile(params.path, params.content);
             return { success: true, path: params.path };
 
         case 'listDirectory':
             const dirPath = params.path || '.';
-            // Maps to window.aesop.fs.readDir which calls "fs:readDir" IPC
             const entries = await window.aesop.fs.readDir(dirPath);
             return { entries, path: dirPath };
 
@@ -41,54 +38,122 @@ export async function executeTool(toolName, params) {
         // -----------------------------------------------------------
         case 'findFiles':
             if (!params.pattern) throw new Error("findFiles requires a 'pattern' parameter.");
-            // Maps to window.aesop.tools.findFiles which calls "codebase:findFiles" IPC
             const findResult = await window.aesop.tools.findFiles(params.pattern);
-            // findResult is structured as { ok: true, results: [...] }
             if (!findResult.ok) throw new Error(findResult.error || "Find files failed.");
             return { results: findResult.results };
 
         case 'searchCode':
             if (!params.query) throw new Error("searchCode requires a 'query' parameter.");
-            // Maps to window.aesop.tools.searchCode which calls "codebase:search" IPC
             const searchResult = await window.aesop.tools.searchCode(params.query, params.options || {});
-            // searchResult is structured as { ok: true, results: [...] }
             if (!searchResult.ok) throw new Error(searchResult.error || "Code search failed.");
             return { results: searchResult.results };
 
         case 'getFileTree':
-            // Maps to listDirectory at the root (reusing logic)
             const treeEntries = await window.aesop.fs.readDir('.');
             return { entries: treeEntries, path: '.' };
 
         // -----------------------------------------------------------
-        // 3.4 Core Tools: Command Execution (Now Implemented)
+        // 3.4 Core Tools: Command Execution
         // -----------------------------------------------------------
         case 'runCommand':
             if (!params.cmd) throw new Error("runCommand requires a 'cmd' parameter with the command string.");
             
-            // This runs the command and waits for it to finish on the main process
             const cmdResult = await window.aesop.tools.runCommand(params.cmd);
             
             if (!cmdResult.ok) throw new Error(cmdResult.error || `Command failed with exit code ${cmdResult.exitCode || 'N/A'}`);
             
-            // Return only the essential success information for the next AI prompt
             return {
                 id: cmdResult.id,
                 command: params.cmd,
                 exitCode: cmdResult.exitCode,
-                // Truncate output for the prompt to save tokens, the AI can call getCommandOutput for full details.
                 outputPreview: cmdResult.output.substring(0, 500) + (cmdResult.output.length > 500 ? '... (truncated)' : '')
             };
 
         case 'getCommandOutput':
             if (!params.id) throw new Error("getCommandOutput requires an 'id' parameter (from runCommand).");
             
-            // Fetches the full output buffer for the command ID
             const outputResult = await window.aesop.tools.getCommandOutput(params.id);
             
             if (!outputResult.ok) throw new Error(outputResult.error || "Could not retrieve command output.");
             
             return { id: params.id, output: outputResult.output };
+            
+        // -----------------------------------------------------------
+        // PHASE 4.2: PROJECT MEMORY TOOLS
+        // -----------------------------------------------------------
+        case 'saveKnowledge':
+            if (!params.knowledge || typeof params.knowledge !== 'object') {
+                 throw new Error("saveKnowledge requires a 'knowledge' object.");
+            }
+            await window.aesop.memory.save(params.knowledge);
+            return { success: true };
+            
+        case 'loadKnowledge':
+            const memoryResult = await window.aesop.memory.load();
+            if (!memoryResult.ok) throw new Error(memoryResult.error || "Failed to load project memory.");
+            return { knowledge: memoryResult.knowledge };
+
+        // -----------------------------------------------------------
+        // PHASE 5.1: DIFF/PATCH TOOLS
+        // -----------------------------------------------------------
+        case 'generateDiff':
+            const diffResult = await window.aesop.git.diff();
+            if (!diffResult.ok) throw new Error(diffResult.error || "Failed to generate diff.");
+            return { diff: diffResult.diff, status: "Uncommitted changes ready for review." };
+
+        case 'applyPatch':
+            if (!params.patchContent || typeof params.patchContent !== 'string') {
+                throw new Error("applyPatch requires 'patchContent' (a string in standard Git diff format).");
+            }
+            const patchResult = await window.aesop.git.applyPatch(params.patchContent);
+            if (!patchResult.ok) {
+                throw new Error(patchResult.error || "Patch application failed."); 
+            }
+            return { success: true, message: patchResult.output };
+            
+        // -----------------------------------------------------------
+        // PHASE 5.2: TESTING INTEGRATION
+        // -----------------------------------------------------------
+        case 'runTests':
+            const testCommand = params.script || 'npm test';
+            
+            const testCmdResult = await window.aesop.tools.runCommand(testCommand);
+            
+            if (!testCmdResult.ok) {
+                throw new Error(testCmdResult.error || `Test command failed to execute: ${testCommand}`);
+            }
+
+            return {
+                command: testCommand,
+                exitCode: testCmdResult.exitCode,
+                fullOutput: testCmdResult.output,
+                summary: `Tests finished with exit code ${testCmdResult.exitCode}.`
+            };
+
+        // -----------------------------------------------------------
+        // PHASE 5.3: LINTING INTEGRATION (NEW)
+        // -----------------------------------------------------------
+        case 'runLinter':
+            // Linter command can include --fix for auto-fixing
+            const linterCommand = params.cmd || 'npm run lint -- --format json'; 
+
+            const linterCmdResult = await window.aesop.tools.runCommand(linterCommand);
+
+            // A linter command failing (exitCode > 0) usually just means errors were found, not that the command crashed.
+            if (!linterCmdResult.ok) {
+                // If the command failed to execute (not just exit with errors), throw.
+                 if (linterCmdResult.error && !linterCmdResult.error.includes('exit code')) {
+                    throw new Error(linterCmdResult.error || `Linter command failed to execute: ${linterCommand}`);
+                 }
+            }
+            
+            return {
+                command: linterCommand,
+                exitCode: linterCmdResult.exitCode,
+                // Return full output (which might be JSON or plain text depending on flags)
+                fullOutput: linterCmdResult.output,
+                summary: `Linter completed with exit code ${linterCmdResult.exitCode}. Check output for details.`
+            };
 
         default:
             throw new Error(`Unknown tool: ${toolName}`);

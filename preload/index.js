@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld("aesop", {
         commit: (message) => ipcRenderer.invoke("git:commit", message),
         push: () => ipcRenderer.invoke("git:push"),
         pull: () => ipcRenderer.invoke("git:pull"),
+        // NEW IPC: Phase 5.1
+        diff: () => ipcRenderer.invoke("git:diff"),
+        applyPatch: (patchContent) => ipcRenderer.invoke("git:applyPatch", patchContent),
     },
 
     prompt: {
@@ -48,9 +51,15 @@ contextBridge.exposeInMainWorld("aesop", {
         killCommand: (id) => ipcRenderer.invoke("cmd:kill", id),
     },
 
-    // NEW BRIDGE: History management (Phase 4.1)
+    // Phase 4.1: History management
     history: {
         save: (messages) => ipcRenderer.invoke("history:save", messages),
         load: () => ipcRenderer.invoke("history:load"),
+    },
+    
+    // Phase 4.2: Memory management
+    memory: {
+        save: (knowledge) => ipcRenderer.invoke("memory:save", knowledge),
+        load: () => ipcRenderer.invoke("memory:load"),
     }
 });
