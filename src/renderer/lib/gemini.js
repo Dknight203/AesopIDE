@@ -1,17 +1,39 @@
 // src/renderer/lib/gemini.js
-export async function askGemini(promptText, options = {}) {
+
+/**
+ * Sends a prompt to the Gemini model via the Electron main process.
+ * @param {string} userPrompt - The main prompt text.
+ * @param {object} options - Configuration options.
+ * @param {string} options.systemPrompt - The system instruction.
+ * @param {string} options.fileContext - Context about the currently active file and surrounding code.
+ * @param {string} options.cursor - Context about the cursor location.
+ * @param {Array<object>} options.history - Conversation history messages.
+ * @param {string} options.knowledgeContext - NEW: Context from Project Knowledge.
+ * @returns {Promise<string>} The AI's text response or an error message.
+ */
+export async function askGemini(
+    userPrompt,
+    { systemPrompt = "", fileContext = null, cursor = null, history = [], knowledgeContext = "" }
+) {
     if (!window.aesop || !window.aesop.prompt || !window.aesop.prompt.send) {
-        throw new Error("Aesop prompt bridge is not available");
+        return "Error: AI service bridge not available (window.aesop.prompt.send is missing).";
     }
 
-    const result = await window.aesop.prompt.send(promptText, options);
+    try {
+        const result = await window.aesop.prompt.send(userPrompt, {
+            systemPrompt,
+            fileContext,
+            cursor,
+            history,
+            knowledgeContext, // NEW: Pass knowledge context
+        });
 
-    if (!result || result.ok !== true) {
-        const message =
-            (result && typeof result.text === "string" && result.text) ||
-            "Gemini request failed";
-        throw new Error(message);
+        if (!result.ok) {
+            return `AI Error: ${result.text}`;
+        }
+        return result.text;
+    } catch (err) {
+        console.error("Gemini API call failed:", err);
+        return `Internal Error: Could not connect to AI service. ${err.message}`;
     }
-
-    return result.text;
 }

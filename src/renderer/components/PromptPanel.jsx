@@ -23,6 +23,9 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
+    // NEW STATE: For Project Knowledge
+    const [projectKnowledge, setProjectKnowledge] = useState({});
+
     // NEW EFFECT: Handle initial prompt injection from the parent
     useEffect(() => {
         if (initialPrompt) {
@@ -35,6 +38,35 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             }
         }
     }, [initialPrompt, onClearInitialPrompt]);
+
+
+    // -----------------------------------------------------------
+    // PHASE 4.2: PROJECT MEMORY LOAD
+    // -----------------------------------------------------------
+
+    // Load project knowledge on initial mount and whenever rootPath changes
+    useEffect(() => {
+        async function loadKnowledge() {
+            if (!rootPath) {
+                setProjectKnowledge({});
+                return;
+            }
+            try {
+                const result = await window.aesop.memory.load();
+                if (result.ok && result.knowledge) {
+                    setProjectKnowledge(result.knowledge);
+                } else {
+                    setProjectKnowledge({});
+                }
+            } catch (err) {
+                console.error("Failed to load project knowledge:", err);
+                setProjectKnowledge({});
+            }
+        }
+
+        loadKnowledge();
+    }, [rootPath]);
+
 
     // -----------------------------------------------------------
     // PHASE 4.1: HISTORY LOADING & SAVING
@@ -96,12 +128,90 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         setMessages((prev) => [...prev, newMessage]);
     };
 
+    /**
+     * Attempts to save project knowledge if the user message matches a save pattern.
+     * @param {string} userText The text from the user input.
+     * @returns {Promise<boolean>} True if a memory save was attempted, false otherwise.
+     */
+    async function handleMemorySave(userText) {
+        // --- START FIX: Use two regexes for flexible command parsing ---
+        // 1. Verb first: (remember|note|...) [that] [:,|-] (CONTENT)
+        const SAVE_STARTING_REGEX = 
+            /^(?:remember|keep in mind|note|memorize)\s*(?:that)?\s*(?::|,|-)?\s*(.*)$/i;
+        // 2. Verb last: (CONTENT) [.,|] (remember this|note this|...)
+        const SAVE_TRAILING_REGEX = 
+            /^(.*)(?:,\s*|\.\s*)\s*(?:remember this|keep this in mind|note this|memorize this)\s*\.?$/i;
+
+        let contentToSave = null;
+        let match = userText.trim().match(SAVE_STARTING_REGEX);
+
+        if (match && match[1] && match[1].trim().length > 0) {
+            contentToSave = match[1].trim();
+        } else {
+            match = userText.trim().match(SAVE_TRAILING_REGEX);
+            if (match && match[1] && match[1].trim().length > 0) {
+                contentToSave = match[1].trim();
+            }
+        }
+        
+        if (!contentToSave) return false; // No content found or no match
+
+        const knowledgeKey = "custom_instructions";
+        const newKnowledgeValue = contentToSave.replace(/\.$/, ''); // Remove trailing dot
+
+        const updatedKnowledge = {
+            ...projectKnowledge,
+            [knowledgeKey]: newKnowledgeValue,
+        };
+
+        const userMessage = {
+            role: "user",
+            content: userText,
+            timestamp: new Date(),
+        };
+        // Add user message immediately
+        setMessages((prev) => [...prev, userMessage]); 
+        setInput("");
+        
+        try {
+            await window.aesop.memory.save(updatedKnowledge);
+            setProjectKnowledge(updatedKnowledge);
+
+            const confirmationMessage = {
+                role: "assistant",
+                content: `Acknowledged. I've saved the following project knowledge: **${newKnowledgeValue}**.\n\nI will use this information when responding to your future requests.`,
+                timestamp: new Date(),
+            };
+            
+            // Add confirmation message
+            setMessages((prev) => [...prev, confirmationMessage]); 
+            return true; // Memory saved successfully
+
+        } catch (err) {
+            console.error("Memory save failed:", err);
+            const errorMessage = {
+                role: "assistant",
+                content: `Error saving knowledge: ${err.message || String(err)}`,
+                timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, errorMessage]);
+            return true; // Still handle the message, but with an error
+        }
+    }
+
+
     async function handleSend() {
         if (!input.trim() || isLoading) return;
 
         const text = input;
 
-        // INTERCEPT RENDERER-SIDE OPEN COMMANDS
+        // 1. Intercept Memory Save command
+        const isMemoryRequest = await handleMemorySave(text);
+        if (isMemoryRequest) {
+            return; // Exit if the command was handled by memory save
+        }
+        
+        // INTERCEPT RENDERER-SIDE OPEN COMMANDS (existing logic)
         const OPEN_COMMAND_REGEX = /^(?:bring up|open|show|display)\s+(.+?)$/i;
         const match = text.trim().match(OPEN_COMMAND_REGEX);
 
@@ -154,7 +264,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             } catch (err) {
                 console.error("Failed to clear history:", err);
             }
-            // ADDED: Clear any pending initial prompt when starting a new chat
+            // Clear any pending initial prompt when starting a new chat
             if (onClearInitialPrompt) {
                 onClearInitialPrompt();
             }
@@ -171,13 +281,21 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             });
         }
 
+        // NEW: Serialize project knowledge for AI context
+        let knowledgeContext = "";
+        if (projectKnowledge && Object.keys(projectKnowledge).length > 0) {
+            knowledgeContext = "PROJECT KNOWLEDGE:\n" + JSON.stringify(projectKnowledge, null, 2) + "\n\n";
+        }
+
 
         // 1. Send to AI
         const reply = await askGemini(userPrompt, {
             systemPrompt: SYSTEM_PROMPT,
             fileContext,
             // Pass the entire history array for continuous context (Phase 4.1)
-            history: history
+            history: history,
+            // NEW: Pass knowledge context to be prepended to prompt
+            knowledgeContext: knowledgeContext
         });
         const aiMessage = {
             role: "assistant",
@@ -253,7 +371,8 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                     const followUpReply = await askGemini(followUpPrompt, {
                         systemPrompt: SYSTEM_PROMPT,
                         fileContext,
-                        history: [...history, aiMessage, resultMsg] // Pass updated history to recursive call
+                        history: [...history, aiMessage, resultMsg], // Pass updated history to recursive call
+                        knowledgeContext: knowledgeContext // NEW: Pass context to recursive call
                     });
                     const followUpMsg = {
                         role: "assistant",

@@ -7,8 +7,6 @@ const simpleGit = require("simple-git");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
-// CRITICAL FIX: Simplest, most stable CommonJS import for nanoid to prevent crash
-// FIX: Correctly extract the nanoid function from the required module object.
 const { nanoid } = require('nanoid/non-secure');
 
 // Track current project root (folder opened in the IDE)
@@ -20,6 +18,7 @@ const commandOutput = new Map();
 
 // Normalize a "relative path" argument that might be a string or an object
 function normalizeRelPath(arg, objectKeys = []) {
+// ... (rest of function unchanged)
     if (!arg) return ".";
     if (typeof arg === "string") return arg;
 
@@ -320,6 +319,7 @@ function registerIpcHandlers() {
             let fileContext = null;
             let cursor = null;
             let history = [];
+            let knowledgeContext = ""; // NEW: knowledgeContext
 
             if (typeof payloadOrText === "string" || payloadOrText instanceof String) {
                 userPrompt = payloadOrText;
@@ -328,6 +328,7 @@ function registerIpcHandlers() {
                     fileContext = maybeOptions.fileContext || null;
                     cursor = maybeOptions.cursor || null;
                     history = maybeOptions.history || [];
+                    knowledgeContext = maybeOptions.knowledgeContext || ""; // NEW
                 }
             } else if (payloadOrText && typeof payloadOrText === "object") {
                 userPrompt = payloadOrText.prompt || "";
@@ -335,11 +336,15 @@ function registerIpcHandlers() {
                 fileContext = payloadOrText.fileContext || null;
                 cursor = payloadOrText.cursor || null;
                 history = payloadOrText.history || [];
+                knowledgeContext = payloadOrText.knowledgeContext || ""; // NEW
             }
 
             const parts = [];
             if (systemPrompt) {
                 parts.push({ text: systemPrompt + "\n\n" });
+            }
+            if (knowledgeContext) { // NEW: Add project knowledge context before file context
+                parts.push({ text: knowledgeContext });
             }
             if (fileContext) {
                 parts.push({ text: "Project context:\n" + fileContext + "\n\n" });
@@ -403,7 +408,6 @@ function registerIpcHandlers() {
     // PHASE 5.1: New Git Command
     ipcMain.handle("git:applyPatch", async (event, patchContent) => {
         const root = ensureRoot();
-        // CRITICAL FIX: Call nanoid as a function here
         const tempPatchPath = path.join(root, '.aesop', `patch-${nanoid()}.patch`);
 
         try {
@@ -495,7 +499,6 @@ function registerIpcHandlers() {
 
     ipcMain.handle("cmd:run", async (event, command) => {
         const root = ensureRoot();
-        // CRITICAL FIX: Call nanoid as a function here
         const commandId = nanoid();
 
         if (!command || typeof command !== "string") {
