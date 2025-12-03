@@ -30,13 +30,14 @@ export default function App() {
     const [statusMessage, setStatusMessage] = useState("");
 
     // Phase 3.2 State: Stores content of the plan waiting for review
-    const [planModalContent, setPlanModalContent] = useState(null); 
-    
+    const [planModalContent, setPlanModalContent] = useState(null);
+
     // Layout state
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false);
     const [sidebarWidth, setSidebarWidth] = useState(250);
-    const [bottomPanelHeight, setBottomPanelHeight] = useState(200);
+    const [bottomPanelHeight, setBottomPanelHeight] = useState(300); // Increased default height
+    const [isResizingBottom, setIsResizingBottom] = useState(false); // New state for resizing
 
     const [modal, setModal] = useState(null); // { title, message, onConfirm }
 
@@ -99,8 +100,33 @@ export default function App() {
         }
 
         window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [activePath, tabs]);
+        window.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("mouseup", handleMouseUp);
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", handleMouseUp);
+        };
+    }, [activePath, tabs, isResizingBottom]);
+
+    // Resize Handlers
+    function handleMouseDown(e) {
+        e.preventDefault();
+        setIsResizingBottom(true);
+    }
+
+    function handleMouseMove(e) {
+        if (!isResizingBottom) return;
+        const newHeight = window.innerHeight - e.clientY;
+        // Min height 100, Max height 80% of window
+        if (newHeight > 100 && newHeight < window.innerHeight * 0.8) {
+            setBottomPanelHeight(newHeight);
+        }
+    }
+
+    function handleMouseUp() {
+        setIsResizingBottom(false);
+    }
 
     function findTab(path) {
         return tabs.find((t) => t.path === path);
@@ -303,7 +329,7 @@ export default function App() {
             setStatusMessage("Supabase test failed");
         }
     }
-    
+
     // -----------------------------------------------------------
     // PHASE 3.2 IMPLEMENTATION
     // -----------------------------------------------------------
@@ -315,12 +341,12 @@ export default function App() {
     async function handleExecutePlan(rawPlanContent) {
         setStatusMessage("Starting multi-step execution...");
         setPlanModalContent(null); // Close modal
-        
+
         try {
             // Find the execution chain hidden in the plan (AI is expected to output a JSON blob in markdown)
             const jsonMatch = rawPlanContent.match(/```json\s*\n([\s\S]*?)```/);
             if (!jsonMatch || !jsonMatch[1]) {
-                 throw new Error("Plan content must contain a fenced JSON block with the execution chain.");
+                throw new Error("Plan content must contain a fenced JSON block with the execution chain.");
             }
 
             const actionChain = JSON.parse(jsonMatch[1]);
@@ -329,7 +355,7 @@ export default function App() {
             }
 
             const results = await executeChain(actionChain);
-            
+
             setStatusMessage(`Execution complete. ${results.length} steps executed successfully.`);
 
         } catch (err) {
@@ -338,7 +364,7 @@ export default function App() {
             console.error("Execution chain failed:", err);
         }
     }
-    
+
     /**
      * Triggers the UI flow for starting a new plan generation.
      */
@@ -369,12 +395,12 @@ export default function App() {
         if (!aiText || typeof aiText !== "string") return null;
 
         const fenced = aiText.match(/```(?:[a-zA-Z0-9]+)?\s*([\s\S]*?)```/);
-        
+
         if (fenced && fenced[1]) {
             let content = fenced[1];
-            
-            content = content.replace(/^\n|\n$/g, ''); 
-            content = content.replace(/\u00a0/g, ' '); 
+
+            content = content.replace(/^\n|\n$/g, '');
+            content = content.replace(/\u00a0/g, ' ');
 
             return content;
         }
@@ -419,14 +445,14 @@ export default function App() {
             setStatusMessage("AI response did not contain a code block to apply.");
             return;
         }
-        
+
         // -----------------------------------------------------------
         // PHASE 3.2 TRIGGER: Intercept 'implementation_plan.md'
         // -----------------------------------------------------------
         if (targetPath.endsWith('implementation_plan.md')) {
             // 1. Create the file on disk (Artifact Creation)
             await createPlanFile(rootPath, newContent);
-            
+
             // 2. Load the content into the Plan Review modal (Request user approval)
             setPlanModalContent(newContent);
             setStatusMessage("Plan received. Awaiting user review and approval.");
@@ -442,7 +468,7 @@ export default function App() {
             setStatusMessage("Error applying AI changes");
         }
     }
-    
+
     // -----------------------------------------------------------
     // AUTOMATIC OPEN-ON-COMMAND IMPLEMENTATION
     // -----------------------------------------------------------
@@ -463,7 +489,7 @@ export default function App() {
         candidates.sort((a, b) => {
             const depthA = (a.path.match(/[\\/]/g) || []).length;
             const depthB = (b.path.match(/[\\/]/g) || []).length;
-            
+
             return depthA - depthB;
         });
 
@@ -553,6 +579,12 @@ export default function App() {
                             height: bottomPanelCollapsed ? 0 : bottomPanelHeight,
                         }}
                     >
+                        {/* Drag Handle */}
+                        <div
+                            className="resize-handle-top"
+                            onMouseDown={handleMouseDown}
+                            title="Drag to resize"
+                        />
                         <BottomPanel />
                     </div>
                 </div>
@@ -584,10 +616,10 @@ export default function App() {
                     onCancel={() => setModal(null)}
                 />
             )}
-            
+
             {/* PHASE 3.2: Render the Plan Review Modal */}
             {planModalContent && (
-                <PlanReview 
+                <PlanReview
                     rootPath={rootPath}
                     onClose={() => setPlanModalContent(null)}
                     onCancel={() => setPlanModalContent(null)}

@@ -67,3 +67,49 @@
     flex: 1;
     word-break: break-word;
 }
+
+.terminal-input-area {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    background: var(--bg-darker);
+    border-top: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+    /* Prevent shrinking */
+}
+
+.terminal-prompt-input {
+    color: var(--accent-primary);
+    font-weight: bold;
+    user-select: none;
+}
+
+.terminal-command-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-light);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    outline: none;
+}
+
+.terminal-run-btn {
+    padding: 4px 12px;
+    font-size: var(--font-size-xs);
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.terminal-run-btn.primary {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.terminal-run-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

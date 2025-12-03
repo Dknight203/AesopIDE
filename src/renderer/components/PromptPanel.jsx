@@ -43,7 +43,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                 setMessages([initialMessage]); // Use default on error
             }
         }
-        
+
         if (rootPath) {
             loadHistory();
         }
@@ -72,7 +72,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     useEffect(() => {
         inputRef.current?.focus();
     }, []);
-    
+
     // Helper function used by App.jsx's autoOpenFileAndMessage
     const appendMessage = (role, content) => {
         const newMessage = {
@@ -87,20 +87,20 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         if (!input.trim() || isLoading) return;
 
         const text = input;
-        
+
         // INTERCEPT RENDERER-SIDE OPEN COMMANDS
         const OPEN_COMMAND_REGEX = /^(?:bring up|open|show|display)\s+(.+?)$/i;
         const match = text.trim().match(OPEN_COMMAND_REGEX);
 
         if (match && onOpenCommand) {
-            const token = match[1].trim().replace(/\s+file(s)?$/i, '').trim(); 
-            
+            const token = match[1].trim().replace(/\s+file(s)?$/i, '').trim();
+
             appendMessage("user", text);
             setInput("");
             setIsLoading(true);
 
             await onOpenCommand(token, appendMessage);
-            
+
             setIsLoading(false);
             return; // EXIT: Command handled locally.
         }
@@ -131,6 +131,18 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         }
     }
 
+    // NEW: Clear chat history
+    async function handleNewChat() {
+        if (confirm("Start a new chat? This will clear the current history.")) {
+            setMessages([initialMessage]);
+            // Clear history in backend
+            try {
+                await window.aesop.history.save([initialMessage]);
+            } catch (err) {
+                console.error("Failed to clear history:", err);
+            }
+        }
+    }
 
     async function processAiTurn(userPrompt, history) {
         // Build context
@@ -148,7 +160,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             systemPrompt: SYSTEM_PROMPT,
             fileContext,
             // Pass the entire history array for continuous context (Phase 4.1)
-            history: history 
+            history: history
         });
         const aiMessage = {
             role: "assistant",
@@ -164,7 +176,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             // Execute tools
             for (const call of toolCalls) {
                 const isFileOp = ['writeFile', 'readFile', 'findFiles', 'createTask', 'readTask', 'createPlan', 'readPlan'].includes(call.tool);
-                
+
                 const toolMsg = {
                     role: "tool",
                     content: `Executing tool: ${call.tool}...`,
@@ -175,13 +187,13 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
                 try {
                     const result = await executeTool(call.tool, call.params);
-                    
+
                     // Auto-open file if created or read
                     if (['createTask', 'readTask', 'createPlan', 'readPlan', 'writeFile', 'readFile'].includes(call.tool)) {
                         let path = null;
                         if (result && result.path) path = result.path;
                         else if (call.params && call.params.path) path = call.params.path;
-                        
+
                         if (!path) {
                             if (call.tool.includes('Task')) path = '.aesop/task.md';
                             if (call.tool.includes('Plan')) path = '.aesop/implementation_plan.md';
@@ -195,7 +207,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                         }
 
 
-                        if (path && onApplyCode) { 
+                        if (path && onApplyCode) {
                             setTimeout(() => onApplyCode(`AesopIDE open file: ${path}`), 100);
                         }
                     }
@@ -342,13 +354,13 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         const isTool = message.role === "tool";
         const isToolResult = message.role === "tool_result";
         const isToolError = message.role === "tool_error";
-        
+
         let roleLabel = "🤖 Assistant";
         if (isUser) roleLabel = "👤 You";
         if (isTool) roleLabel = "🛠️ Tool";
         if (isToolResult) roleLabel = "📝 Result";
         if (isToolError) roleLabel = "⚠️ Error";
-        
+
         // Use a concise message for tool actions that don't need raw content exposed
         let displayContent = message.content;
         if (isToolResult && displayContent.includes('Tool **')) {
@@ -357,7 +369,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             // This attempts to clean up the content for better display in the log
             displayContent = displayContent.replace(/Tool '.*?' output:\n```json\n/, '').replace(/\n```/g, '');
             if (displayContent.length > 200) {
-                 displayContent = displayContent.substring(0, 200) + '... (truncated JSON)';
+                displayContent = displayContent.substring(0, 200) + '... (truncated JSON)';
             }
         }
 
@@ -372,7 +384,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                         "message-tool_error" :
                         "message-assistant"
             }`;
-        
+
         return (
             <div key={index} className={messageClass}>
                 <div className="message-header">
@@ -418,8 +430,11 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                 <div className="prompt-header-left">
                     <span className="prompt-title">✨ AI Assistant</span>
                 </div>
-                <div 
+                <div
                     className="prompt-header-right">
+                    <button className="prompt-new-chat-btn" onClick={handleNewChat} title="New Chat">
+                        ➕ New Chat
+                    </button>
                     <button className="prompt-close-btn" onClick={onClose} title="Close">
                         ✕
                     </button>
