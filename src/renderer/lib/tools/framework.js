@@ -1,4 +1,4 @@
-﻿/* src/renderer/lib/tools/framework.js
+/* src/renderer/lib/tools/framework.js
    Tool registry + executor for Phase 2
 */
 import { readFile, writeFile, readDirectory } from "../fileSystem";

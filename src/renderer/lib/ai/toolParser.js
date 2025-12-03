@@ -1,4 +1,4 @@
-﻿/* src/renderer/lib/ai/toolParser.js
+/* src/renderer/lib/ai/toolParser.js
    Parses tool calls from AI text.
 */
 function tryParseJSON(s) {

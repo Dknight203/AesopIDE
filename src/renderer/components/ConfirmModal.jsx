@@ -1,4 +1,4 @@
-﻿/* src/renderer/components/ConfirmModal.jsx */
+/* src/renderer/components/ConfirmModal.jsx */
 import React, { useEffect, useRef } from "react";
 import "../styles/app.css";
 
