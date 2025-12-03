@@ -2,8 +2,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import "../styles/prompt.css";
 import { askGemini } from "../lib/gemini";
+import { SYSTEM_PROMPT } from "../lib/ai/systemPrompt";
+import { buildFileContext } from "../lib/codebase/context";
 
-export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath }) {
+export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath, codebaseIndex }) {
     const [messages, setMessages] = useState([
         {
             role: "assistant",
@@ -25,70 +27,6 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath 
         inputRef.current?.focus();
     }, []);
 
-    const systemPrompt =
-        "You are the built in assistant inside AesopIDE, a local code editor. " +
-        "You can see an optional 'fileContext' string that contains the path and contents of a file. " +
-        "Use that context to answer questions and propose concrete edits.\\n\\n" +
-        "When you want to CREATE or EDIT a file, follow this exact format:\\n\\n" +
-        "1. A short natural language summary of the planned changes for the user.\\n" +
-        "2. A line that starts with: AesopIDE target file: relative/path/to/file.ext\\n" +
-        "3. A single fenced code block containing the FULL contents of that file.\\n\\n" +
-        "Example (editing a React header component):\\n\\n" +
-        "I will make the header sticky, fix the mobile layout, and update the navigation links.\\n" +
-        "AesopIDE target file: src/components/Header.tsx\\n" +
-        "```tsx\\n" +
-        "// updated file content here\\n" +
-        "```\\n\\n" +
-        "For planning tasks like designing a new app, you may pick a markdown plan file, " +
-        "for example: AesopIDE target file: plans/diet-tracker.md and then provide the full plan as markdown.\\n\\n" +
-        "If you are only answering a question and do not need to modify any file, you may respond normally without the AesopIDE line or code block.\\n\\n" +
-        "To simply OPEN a file for the user to view in the editor without changing it, respond with a line that starts with:\\n" +
-        "AesopIDE open file: relative/path/to/file.ext\\n" +
-        "For an open file action, do not include any fenced code block that would overwrite the file content.";
-
-    async function buildFileContext(promptText) {
-        // If there is an active tab, use that as context
-        if (activeTab && activeTab.path) {
-            return (
-                "Root: " +
-                (rootPath || "(unknown)") +
-                "\\nActive file: " +
-                activeTab.path +
-                "\\n\\n" +
-                (activeTab.content || "")
-            );
-        }
-
-        // Fallback: if the user typed something that looks like a file path, try loading it
-        const fileMatch = promptText.match(
-            /([\\w./-]+?\\.(md|txt|js|jsx|ts|tsx|json|css|html))/i
-        );
-        if (fileMatch && fileMatch[1]) {
-            const relPath = fileMatch[1];
-            if (
-                window.aesop &&
-                window.aesop.fs &&
-                typeof window.aesop.fs.readFile === "function"
-            ) {
-                try {
-                    const content = await window.aesop.fs.readFile(relPath);
-                    return (
-                        "Root: " +
-                        (rootPath || "(unknown)") +
-                        "\\nRequested file: " +
-                        relPath +
-                        "\\n\\n" +
-                        (content || "")
-                    );
-                } catch (err) {
-                    console.error("[PromptPanel] Failed to read file from prompt:", err);
-                }
-            }
-        }
-
-        return null;
-    }
-
     async function handleSend() {
         if (!input.trim() || isLoading) return;
 
@@ -104,10 +42,17 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath 
         setIsLoading(true);
 
         try {
-            const fileContext = await buildFileContext(text);
+            // Build context using the new multi-file context builder
+            let fileContext = "";
+            if (activeTab && activeTab.path) {
+                fileContext = await buildFileContext(activeTab.path, codebaseIndex || [], {
+                    includeImports: true,
+                    includeImporters: true
+                });
+            }
 
             const reply = await askGemini(text, {
-                systemPrompt,
+                systemPrompt: SYSTEM_PROMPT,
                 fileContext,
             });
 

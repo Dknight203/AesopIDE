@@ -15,6 +15,7 @@ import StatusBar from "./components/StatusBar";
 import { getRoot, openFolderDialog } from "./lib/project";
 import { readFile, writeFile, newFile, newFolder } from "./lib/fileSystem";
 import { testSupabase } from "./lib/supabase";
+import { scanProject } from "./lib/codebase/indexer";
 
 export default function App() {
     const [rootPath, setRootPath] = useState("");
@@ -31,11 +32,20 @@ export default function App() {
 
     const [modal, setModal] = useState(null); // { title, message, onConfirm }
 
+    // Codebase index for AI context
+    const [codebaseIndex, setCodebaseIndex] = useState([]);
+    const [indexing, setIndexing] = useState(false);
+
     useEffect(() => {
         async function loadRoot() {
             try {
                 const root = await getRoot();
                 setRootPath(root);
+
+                // Index the codebase for AI context
+                if (root) {
+                    indexCodebase();
+                }
             } catch (err) {
                 console.error("getRoot error:", err);
                 setStatusMessage("Error reading project root");
@@ -43,6 +53,22 @@ export default function App() {
         }
         loadRoot();
     }, []);
+
+    // Index codebase for AI
+    async function indexCodebase() {
+        setIndexing(true);
+        setStatusMessage("Indexing codebase...");
+        try {
+            const index = await scanProject(rootPath);
+            setCodebaseIndex(index);
+            setStatusMessage(`Indexed ${index.length} files`);
+        } catch (err) {
+            console.error("Indexing error:", err);
+            setStatusMessage("Error indexing codebase");
+        } finally {
+            setIndexing(false);
+        }
+    }
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -211,6 +237,9 @@ export default function App() {
             setTabs([]);
             setActivePath("");
             setStatusMessage(`Opened project ${res.root}`);
+
+            // Re-index the new project
+            await indexCodebase();
         } catch (err) {
             console.error("openFolder error:", err);
             setStatusMessage("Error opening folder");
@@ -392,6 +421,7 @@ export default function App() {
                         onApplyCode={handleApplyCode}
                         activeTab={activeTab}
                         rootPath={rootPath}
+                        codebaseIndex={codebaseIndex}
                     />
                 </div>
             </div>
