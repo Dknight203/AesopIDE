@@ -1,178 +1,96 @@
-/* src/renderer/lib/tools/framework.js
-   Tool registry + executor for Phase 2
-*/
-import { readFile, writeFile, readDirectory } from "../fileSystem";
-import { searchCode, findFilesByName } from "../codebase/search";
-import { scanProject, filterByExtension } from "../codebase/indexer";
+// src/renderer/lib/tools/framework.js
 
-const tools = new Map();
+/**
+ * Executes a tool called by the AI model by mapping the tool name 
+ * to the appropriate IPC bridge call and structuring the arguments.
+ * * This file implements the Tool Registry and Tool Executor for the renderer.
+ * * @param {string} toolName - The name of the tool to execute (e.g., 'readFile').
+ * @param {Object} params - The parameters provided by the AI tool call.
+ * @returns {Promise<any>} The result of the tool execution.
+ */
+export async function executeTool(toolName, params) {
+    if (!window.aesop || !window.aesop.fs || !window.aesop.tools) {
+        throw new Error("Aesop IPC bridge not fully available for tools. Check preload/index.js.");
+    }
 
-function validateParams(spec = {}, params = {}) {
-  const errors = [];
-  for (const [k, m] of Object.entries(spec)) {
-    if (m.required && (params[k] === undefined || params[k] === null)) errors.push(`Missing required param: ${k}`);
-  }
-  return errors;
+    // This switch statement maps AI-facing tool names to low-level IPC bridge calls.
+    switch (toolName) {
+        // -----------------------------------------------------------
+        // 2.2 Core Tools: File Operations
+        // -----------------------------------------------------------
+        case 'readFile':
+            if (!params.path) throw new Error("readFile requires a 'path' parameter.");
+            // Maps to window.aesop.fs.readFile which calls "fs:readFile" IPC
+            const content = await window.aesop.fs.readFile(params.path);
+            return { content, path: params.path };
+
+        case 'writeFile':
+            if (!params.path || typeof params.content === 'undefined') throw new Error("writeFile requires 'path' and 'content' parameters.");
+            // Maps to window.aesop.fs.writeFile which calls "fs:writeFile" IPC
+            await window.aesop.fs.writeFile(params.path, params.content);
+            return { success: true, path: params.path };
+
+        case 'listDirectory':
+            const dirPath = params.path || '.';
+            // Maps to window.aesop.fs.readDir which calls "fs:readDir" IPC
+            const entries = await window.aesop.fs.readDir(dirPath);
+            return { entries, path: dirPath };
+
+        // -----------------------------------------------------------
+        // 2.2 Core Tools: Search
+        // -----------------------------------------------------------
+        case 'findFiles':
+            if (!params.pattern) throw new Error("findFiles requires a 'pattern' parameter.");
+            // Maps to window.aesop.tools.findFiles which calls "codebase:findFiles" IPC
+            const findResult = await window.aesop.tools.findFiles(params.pattern);
+            // findResult is structured as { ok: true, results: [...] }
+            if (!findResult.ok) throw new Error(findResult.error || "Find files failed.");
+            return { results: findResult.results };
+
+        case 'searchCode':
+            if (!params.query) throw new Error("searchCode requires a 'query' parameter.");
+            // Maps to window.aesop.tools.searchCode which calls "codebase:search" IPC
+            const searchResult = await window.aesop.tools.searchCode(params.query, params.options || {});
+            // searchResult is structured as { ok: true, results: [...] }
+            if (!searchResult.ok) throw new Error(searchResult.error || "Code search failed.");
+            return { results: searchResult.results };
+
+        case 'getFileTree':
+            // Maps to listDirectory at the root (reusing logic)
+            const treeEntries = await window.aesop.fs.readDir('.');
+            return { entries: treeEntries, path: '.' };
+
+        // -----------------------------------------------------------
+        // 3.4 Core Tools: Command Execution (Now Implemented)
+        // -----------------------------------------------------------
+        case 'runCommand':
+            if (!params.cmd) throw new Error("runCommand requires a 'cmd' parameter with the command string.");
+            
+            // This runs the command and waits for it to finish on the main process
+            const cmdResult = await window.aesop.tools.runCommand(params.cmd);
+            
+            if (!cmdResult.ok) throw new Error(cmdResult.error || `Command failed with exit code ${cmdResult.exitCode || 'N/A'}`);
+            
+            // Return only the essential success information for the next AI prompt
+            return {
+                id: cmdResult.id,
+                command: params.cmd,
+                exitCode: cmdResult.exitCode,
+                // Truncate output for the prompt to save tokens, the AI can call getCommandOutput for full details.
+                outputPreview: cmdResult.output.substring(0, 500) + (cmdResult.output.length > 500 ? '... (truncated)' : '')
+            };
+
+        case 'getCommandOutput':
+            if (!params.id) throw new Error("getCommandOutput requires an 'id' parameter (from runCommand).");
+            
+            // Fetches the full output buffer for the command ID
+            const outputResult = await window.aesop.tools.getCommandOutput(params.id);
+            
+            if (!outputResult.ok) throw new Error(outputResult.error || "Could not retrieve command output.");
+            
+            return { id: params.id, output: outputResult.output };
+
+        default:
+            throw new Error(`Unknown tool: ${toolName}`);
+    }
 }
-
-export function registerTool(def) {
-  if (!def || !def.name || typeof def.fn !== 'function') throw new Error('Invalid tool');
-  tools.set(def.name, def);
-}
-
-export function getTool(name) { return tools.get(name); }
-export function listTools() { return Array.from(tools.values()).map(t => ({ name: t.name, description: t.description, params: t.params || {} })); }
-
-export async function executeTool(name, params = {}) {
-  const tool = getTool(name);
-  if (!tool) throw new Error('Tool not found: ' + name);
-  const errors = validateParams(tool.params || {}, params);
-  if (errors.length) {
-    const e = new Error('Invalid parameters: ' + errors.join('; '));
-    e.validation = errors;
-    throw e;
-  }
-  return await tool.fn(params);
-}
-
-// Built-ins (renderer side wrappers)
-registerTool({
-  name: 'readFile',
-  description: 'Read file content relative to project root',
-  params: { path: { type: 'string', required: true } },
-  fn: async ({ path }) => ({ path, content: await readFile(path) })
-});
-
-registerTool({
-  name: 'writeFile',
-  description: 'Write content to file (destructive). Must confirm in UI.',
-  params: { path: { type: 'string', required: true }, content: { type: 'string', required: true } },
-  fn: async ({ path, content }) => { await writeFile(path, content); return { path, ok: true }; }
-});
-
-registerTool({
-  name: 'listDirectory',
-  description: 'List directory contents',
-  params: { path: { type: 'string', required: false } },
-  fn: async ({ path = '.' }) => ({ path, entries: await readDirectory(path) })
-});
-
-registerTool({
-  name: 'searchCode',
-  description: 'Search indexed files',
-  params: { query: { type: 'string', required: true }, fileExtensions: { type: 'array', required: false }, caseSensitive: { type: 'boolean', required: false } },
-  fn: async ({ query, fileExtensions = null, caseSensitive = false }) => {
-    const index = await scanProject('.');
-    const files = fileExtensions ? filterByExtension(index, fileExtensions) : index;
-    const results = await searchCode(query, files, { caseSensitive, maxResults: 200 });
-    return { query, results };
-  }
-});
-
-registerTool({
-  name: 'findFiles',
-  description: 'Find files by pattern',
-  params: { pattern: { type: 'string', required: true } },
-  fn: async ({ pattern }) => ({ pattern, results: findFilesByName(pattern, await scanProject('.')) })
-});
-
-registerTool({
-  name: 'getFileTree',
-  description: 'Return project file index',
-  params: {},
-  fn: async () => ({ index: await scanProject('.') })
-});
-
-// runCommand and getCommandOutput are implemented in preload/ipc
-registerTool({
-  name: 'runCommand',
-  description: 'Execute shell command via backend',
-  params: { cmd: { type: 'string', required: true } },
-  fn: async ({ cmd }) => {
-    if (!window.aesop || !window.aesop.tools || typeof window.aesop.tools.runCommand !== 'function') throw new Error('runCommand not available');
-    return await window.aesop.tools.runCommand(cmd);
-  }
-});
-
-registerTool({
-  name: 'getCommandOutput',
-  description: 'Retrieve output for a previously run command',
-  params: { id: { type: 'string', required: true } },
-  fn: async ({ id }) => {
-    if (!window.aesop || !window.aesop.tools || typeof window.aesop.tools.getCommandOutput !== 'function') throw new Error('getCommandOutput not available');
-    return await window.aesop.tools.getCommandOutput(id);
-  }
-});
-
-// Task Management Tools
-registerTool({
-  name: 'createTask',
-  description: 'Create a new task.md file with structured tasks',
-  params: {
-    taskData: { type: 'object', required: true }
-  },
-  fn: async ({ taskData }) => {
-    if (!window.aesop || !window.aesop.task) throw new Error('Task API not available');
-    return await window.aesop.task.create(taskData);
-  }
-});
-
-registerTool({
-  name: 'readTask',
-  description: 'Read the current task.md file',
-  params: {},
-  fn: async () => {
-    if (!window.aesop || !window.aesop.task) throw new Error('Task API not available');
-    return await window.aesop.task.read();
-  }
-});
-
-registerTool({
-  name: 'updateTask',
-  description: 'Update a task status (pending/in-progress/complete)',
-  params: {
-    taskText: { type: 'string', required: true },
-    status: { type: 'string', required: true }
-  },
-  fn: async ({ taskText, status }) => {
-    if (!window.aesop || !window.aesop.task) throw new Error('Task API not available');
-    return await window.aesop.task.update(taskText, status);
-  }
-});
-
-// Planning Tools
-import { createPlan, readPlan, approvePlan, rejectPlan, hasPendingPlan } from '../planning/planner.js';
-
-registerTool({
-  name: 'createPlan',
-  description: 'Create an implementation plan for user review',
-  params: {
-    planData: { type: 'object', required: true }
-  },
-  fn: async ({ planData }) => {
-    const projectPath = '.'; // Current project
-    return await createPlan(projectPath, planData);
-  }
-});
-
-registerTool({
-  name: 'readPlan',
-  description: 'Read the current implementation plan',
-  params: {},
-  fn: async () => {
-    const projectPath = '.';
-    return await readPlan(projectPath);
-  }
-});
-
-registerTool({
-  name: 'checkPendingPlan',
-  description: 'Check if there is a pending plan awaiting approval',
-  params: {},
-  fn: async () => {
-    const projectPath = '.';
-    return { hasPending: await hasPendingPlan(projectPath) };
-  }
-});
-
-export default { registerTool, getTool, listTools, executeTool };

@@ -33,14 +33,18 @@ contextBridge.exposeInMainWorld("aesop", {
             }),
     },
 
-    task: {
-        create: (taskData) => ipcRenderer.invoke("task:create", { taskData }),
-        read: () => ipcRenderer.invoke("task:read"),
-        update: (taskText, status) => ipcRenderer.invoke("task:update", { taskText, status }),
-        updateMultiple: (updates) => ipcRenderer.invoke("task:updateMultiple", { updates }),
-    },
-
     supabase: {
         test: () => ipcRenderer.invoke("supabase:test"),
     },
+    
+    tools: {
+        // Expose codebase search handlers
+        searchCode: (query, options) => ipcRenderer.invoke("codebase:search", { query, options }),
+        findFiles: (pattern) => ipcRenderer.invoke("codebase:findFiles", { pattern }),
+
+        // NEW: Expose terminal command handlers
+        runCommand: (command) => ipcRenderer.invoke("cmd:run", command),
+        getCommandOutput: (id) => ipcRenderer.invoke("cmd:getOutput", id),
+        killCommand: (id) => ipcRenderer.invoke("cmd:kill", id),
+    }
 });

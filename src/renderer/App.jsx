@@ -11,13 +11,16 @@ import BottomPanel from "./components/BottomPanel";
 import PromptPanel from "./components/PromptPanel";
 import InputModal from "./components/InputModal";
 import StatusBar from "./components/StatusBar";
+// NEW COMPONENT IMPORT
+import PlanReview from "./components/PlanReview";
 
 import { getRoot, openFolderDialog } from "./lib/project";
 import { readFile, writeFile, newFile, newFolder } from "./lib/fileSystem";
 import { testSupabase } from "./lib/supabase";
 import { scanProject } from "./lib/codebase/indexer";
-// NEW IMPORT: Required for the automatic file search logic
 import { findFilesByName } from "./lib/codebase/search";
+// NEW TASK MANAGER IMPORTS
+import { executeChain, createPlanFile } from "./lib/tasks/manager";
 
 export default function App() {
     const [rootPath, setRootPath] = useState("");
@@ -26,6 +29,9 @@ export default function App() {
     const [promptOpen, setPromptOpen] = useState(false);
     const [statusMessage, setStatusMessage] = useState("");
 
+    // Phase 3.2 State: Stores content of the plan waiting for review
+    const [planModalContent, setPlanModalContent] = useState(null); 
+    
     // Layout state
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false);
@@ -297,6 +303,56 @@ export default function App() {
             setStatusMessage("Supabase test failed");
         }
     }
+    
+    // -----------------------------------------------------------
+    // PHASE 3.2 IMPLEMENTATION
+    // -----------------------------------------------------------
+
+    /**
+     * Attempts to parse tool calls from the plan content and execute them sequentially.
+     * @param {string} rawPlanContent - The content of the plan file.
+     */
+    async function handleExecutePlan(rawPlanContent) {
+        setStatusMessage("Starting multi-step execution...");
+        setPlanModalContent(null); // Close modal
+        
+        try {
+            // Find the execution chain hidden in the plan (AI is expected to output a JSON blob in markdown)
+            const jsonMatch = rawPlanContent.match(/```json\s*\n([\s\S]*?)```/);
+            if (!jsonMatch || !jsonMatch[1]) {
+                 throw new Error("Plan content must contain a fenced JSON block with the execution chain.");
+            }
+
+            const actionChain = JSON.parse(jsonMatch[1]);
+            if (!Array.isArray(actionChain)) {
+                throw new Error("Execution chain must be a JSON array of actions.");
+            }
+
+            const results = await executeChain(actionChain);
+            
+            setStatusMessage(`Execution complete. ${results.length} steps executed successfully.`);
+
+        } catch (err) {
+            const errorMsg = err.error || err.message || "Unknown error during execution.";
+            setStatusMessage(`Execution failed: ${errorMsg}`);
+            console.error("Execution chain failed:", err);
+        }
+    }
+    
+    /**
+     * Triggers the UI flow for starting a new plan generation.
+     */
+    function handleNewPlan() {
+        setPromptOpen(true);
+        // Hint the user/AI to start a planning task if the prompt is empty
+        setStatusMessage("Planning Mode: Ask the AI to create an 'implementation_plan.md'.");
+        // Optionally inject text into the prompt input to start the process
+    }
+
+    // -----------------------------------------------------------
+    // END PHASE 3.2 IMPLEMENTATION
+    // -----------------------------------------------------------
+
 
     // Parse "AesopIDE target file: some/path.tsx" from AI response
     function extractTargetPath(aiText, fallbackPath) {
@@ -308,13 +364,19 @@ export default function App() {
         return fallbackPath || null;
     }
 
-    // Extract the first fenced code block from AI response
+    // FIX: Corrected function to preserve formatting/newlines/spaces within the code block.
     function extractCodeFromAi(aiText) {
         if (!aiText || typeof aiText !== "string") return null;
 
-        const fenced = aiText.match(/```(?:[a-zA-Z0-9]+)?\s*\n([\s\S]*?)```/);
+        const fenced = aiText.match(/```(?:[a-zA-Z0-9]+)?\s*([\s\S]*?)```/);
+        
         if (fenced && fenced[1]) {
-            return fenced[1].trim();
+            let content = fenced[1];
+            
+            content = content.replace(/^\n|\n$/g, ''); 
+            content = content.replace(/\u00a0/g, ' '); 
+
+            return content;
         }
 
         return null;
@@ -341,9 +403,10 @@ export default function App() {
             return;
         }
 
-        // Normal edit flow using "AesopIDE target file" and a code block
+        // Determine target file and content
         const fallbackPath = activePath || null;
         const targetPath = extractTargetPath(aiText, fallbackPath);
+        const newContent = extractCodeFromAi(aiText);
 
         if (!targetPath) {
             setStatusMessage(
@@ -352,11 +415,25 @@ export default function App() {
             return;
         }
 
-        const newContent = extractCodeFromAi(aiText);
         if (!newContent) {
             setStatusMessage("AI response did not contain a code block to apply.");
             return;
         }
+        
+        // -----------------------------------------------------------
+        // PHASE 3.2 TRIGGER: Intercept 'implementation_plan.md'
+        // -----------------------------------------------------------
+        if (targetPath.endsWith('implementation_plan.md')) {
+            // 1. Create the file on disk (Artifact Creation)
+            await createPlanFile(rootPath, newContent);
+            
+            // 2. Load the content into the Plan Review modal (Request user approval)
+            setPlanModalContent(newContent);
+            setStatusMessage("Plan received. Awaiting user review and approval.");
+            return; // EXIT: Do not proceed to open or apply as normal file
+        }
+        // -----------------------------------------------------------
+
 
         try {
             await openFileByPath(targetPath, newContent);
@@ -365,21 +442,14 @@ export default function App() {
             setStatusMessage("Error applying AI changes");
         }
     }
-
+    
     // -----------------------------------------------------------
-    // NEW LOGIC START: AUTOMATIC OPEN-ON-COMMAND
+    // AUTOMATIC OPEN-ON-COMMAND IMPLEMENTATION
     // -----------------------------------------------------------
 
-    /**
-     * Logic to choose the best file when multiple matches are found.
-     * Prefers non-backup files and files closer to the project root (less deep).
-     * @param {Array<{path: string, name: string}>} files - List of candidate file objects.
-     * @returns {string|null} The path of the best candidate or null.
-     */
     const selectBestCandidate = (files) => {
         if (!files || files.length === 0) return null;
 
-        // 1. Filter out obvious backup/lock files
         const nonBackupPaths = files.filter(
             (file) =>
                 !file.path.toLowerCase().includes('backup') &&
@@ -390,29 +460,17 @@ export default function App() {
 
         let candidates = nonBackupPaths.length > 0 ? nonBackupPaths : files;
 
-        // 2. Sort: prefer shallowest depth (fewer '/' or '\' characters)
         candidates.sort((a, b) => {
-            const pathA = a.path;
-            const pathB = b.path;
-            // Count separators to approximate depth (normalized paths use '/')
-            const depthA = (pathA.match(/[\\/]/g) || []).length;
-            const depthB = (pathB.match(/[\\/]/g) || []).length;
+            const depthA = (a.path.match(/[\\/]/g) || []).length;
+            const depthB = (b.path.match(/[\\/]/g) || []).length;
             
-            // Prefer less depth
             return depthA - depthB;
         });
 
-        // The best candidate is the one left after filtering and sorting
         return candidates[0].path;
     };
 
 
-    /**
-     * Executes the hardcoded open-file workflow triggered by a natural language command.
-     * @param {string} token - The file name/part provided by the user (e.g., 'ipchandlers').
-     * @param {Function} appendMessage - Function to send a message back to the PromptPanel chat.
-     * @returns {Promise<void>}
-     */
     const autoOpenFileAndMessage = async (token, appendMessage) => {
         if (!codebaseIndex || codebaseIndex.length === 0) {
             appendMessage("assistant", "Project index unavailable. Cannot automatically find and open files. Try opening a folder first.");
@@ -420,7 +478,6 @@ export default function App() {
         }
 
         try {
-            // 1. Run findFilesByName (simulates tool call but uses local index)
             const pattern = `*${token}*`;
             const foundFiles = findFilesByName(pattern, codebaseIndex);
 
@@ -429,7 +486,6 @@ export default function App() {
                 return;
             }
 
-            // 2. Choose best candidate (prefer non-backup, shallowest)
             const chosenPath = selectBestCandidate(foundFiles);
 
             if (!chosenPath) {
@@ -437,22 +493,15 @@ export default function App() {
                 return;
             }
 
-            // 3. & 4. Read and open the file using existing App logic, then send message
-            await openFileByPath(chosenPath, null); // null content forces read from disk
+            await openFileByPath(chosenPath, null);
 
-            // This is the friendly message shown instead of raw tool JSON
             appendMessage("assistant", `Opened file: **${chosenPath}**`);
 
         } catch (err) {
             console.error("[Automatic Open Error]", err);
-            // Inform the user of a technical failure
             appendMessage("assistant", `Error during automatic open: ${err.message}`);
         }
     };
-
-    // -----------------------------------------------------------
-    // NEW LOGIC END
-    // -----------------------------------------------------------
 
 
     const activeTab = findTab(activePath);
@@ -469,6 +518,8 @@ export default function App() {
                 onToggleBottomPanel={() =>
                     setBottomPanelCollapsed(!bottomPanelCollapsed)
                 }
+                // NEW PROP: Pass handler to TopBar
+                onNewPlan={handleNewPlan}
                 sidebarCollapsed={sidebarCollapsed}
                 bottomPanelCollapsed={bottomPanelCollapsed}
             />
@@ -510,7 +561,6 @@ export default function App() {
                     <PromptPanel
                         onClose={() => setPromptOpen(false)}
                         onApplyCode={handleApplyCode}
-                        // NEW PROP PASSED TO PROMPT PANEL
                         onOpenCommand={autoOpenFileAndMessage}
                         activeTab={activeTab}
                         rootPath={rootPath}
@@ -532,6 +582,17 @@ export default function App() {
                     message={modal.message}
                     onConfirm={modal.onConfirm}
                     onCancel={() => setModal(null)}
+                />
+            )}
+            
+            {/* PHASE 3.2: Render the Plan Review Modal */}
+            {planModalContent && (
+                <PlanReview 
+                    rootPath={rootPath}
+                    onClose={() => setPlanModalContent(null)}
+                    onCancel={() => setPlanModalContent(null)}
+                    onExecutePlan={handleExecutePlan}
+                    initialPlanContent={planModalContent}
                 />
             )}
         </div>

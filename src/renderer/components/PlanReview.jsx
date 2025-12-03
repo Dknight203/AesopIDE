@@ -1,177 +1,86 @@
 // src/renderer/components/PlanReview.jsx
 import React, { useState, useEffect } from 'react';
+import { executeChain, readPlanFile } from '../lib/tasks/manager';
 import '../styles/planreview.css';
 
-export default function PlanReview({ projectPath, onApprove, onReject, onClose }) {
-    const [plan, setPlan] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [rejectionReason, setRejectionReason] = useState('');
-    const [showRejectInput, setShowRejectInput] = useState(false);
+export default function PlanReview({ 
+    rootPath, 
+    onClose, 
+    onExecute, 
+    onCancel, 
+    initialPlanContent 
+}) {
+    const [planContent, setPlanContent] = useState(initialPlanContent || "Loading implementation plan...");
+    const [status, setStatus] = useState("Awaiting approval");
 
     useEffect(() => {
-        loadPlan();
-    }, [projectPath]);
+        // If no initial content is passed, try to load it from the disk (Phase 3.2 Artifact)
+        if (!initialPlanContent) {
+            loadPlan();
+        }
+    }, [initialPlanContent]);
 
     async function loadPlan() {
         try {
-            const planPath = `${projectPath}/.aesop/implementation_plan.md`;
-            const content = await window.aesop.fs.readFile(planPath);
-            setPlan(content);
-        } catch (err) {
-            console.error('[PlanReview] Failed to load plan:', err);
-            setPlan(null);
-        } finally {
-            setLoading(false);
+            const content = await readPlanFile(rootPath);
+            if (content) {
+                setPlanContent(content);
+                setStatus("Ready to execute");
+            } else {
+                setPlanContent("No implementation plan found on disk. Ask the AI to generate one.");
+                setStatus("Error loading plan");
+            }
+        } catch (error) {
+            setPlanContent(`Error loading plan: ${error.message}`);
+            setStatus("Error");
         }
     }
 
-    function handleApprove() {
-        if (onApprove) onApprove();
-    }
-
-    function handleReject() {
-        if (!rejectionReason.trim()) {
-            alert('Please provide a reason for rejection');
-            return;
-        }
-        if (onReject) onReject(rejectionReason);
-        setShowRejectInput(false);
-        setRejectionReason('');
-    }
-
-    function renderMarkdown(text) {
-        // Simple markdown rendering
-        const lines = text.split('\n');
-        return lines.map((line, idx) => {
-            // Headers
-            if (line.startsWith('# ')) {
-                return <h1 key={idx}>{line.substring(2)}</h1>;
-            }
-            if (line.startsWith('## ')) {
-                return <h2 key={idx}>{line.substring(3)}</h2>;
-            }
-            if (line.startsWith('### ')) {
-                return <h3 key={idx}>{line.substring(4)}</h3>;
-            }
-            if (line.startsWith('#### ')) {
-                return <h4 key={idx}>{line.substring(5)}</h4>;
-            }
-
-            // Horizontal rule
-            if (line.trim() === '---') {
-                return <hr key={idx} />;
-            }
-
-            // List items
-            if (line.startsWith('- ')) {
-                return <li key={idx}>{line.substring(2)}</li>;
-            }
-
-            // Bold text
-            if (line.includes('**')) {
-                const parts = line.split('**');
-                return (
-                    <p key={idx}>
-                        {parts.map((part, i) =>
-                            i % 2 === 1 ? <strong key={i}>{part}</strong> : part
-                        )}
-                    </p>
-                );
-            }
-
-            // Blockquotes (alerts)
-            if (line.startsWith('> ')) {
-                const alertMatch = line.match(/>\s*\[!(\w+)\]/);
-                if (alertMatch) {
-                    const level = alertMatch[1].toLowerCase();
-                    return <div key={idx} className={`alert alert-${level}`}></div>;
-                }
-                return <blockquote key={idx}>{line.substring(2)}</blockquote>;
-            }
-
-            // Regular paragraph
-            if (line.trim()) {
-                return <p key={idx}>{line}</p>;
-            }
-
-            return <br key={idx} />;
-        });
-    }
-
-    if (loading) {
-        return (
-            <div className="plan-review">
-                <div className="plan-review-loading">Loading plan...</div>
-            </div>
-        );
-    }
-
-    if (!plan) {
-        return (
-            <div className="plan-review">
-                <div className="plan-review-error">No implementation plan found</div>
-                <button className="plan-review-close" onClick={onClose}>Close</button>
-            </div>
-        );
-    }
+    const planSections = planContent.split(/^(#+ .+\n)/gm).filter(s => s.trim().length > 0);
 
     return (
-        <div className="plan-review">
-            <div className="plan-review-header">
-                <h2>📋 Implementation Plan Review</h2>
-                <button className="plan-review-close-btn" onClick={onClose} title="Close">
-                    ✕
-                </button>
-            </div>
-
-            <div className="plan-review-content">
-                {renderMarkdown(plan)}
-            </div>
-
-            <div className="plan-review-actions">
-                {!showRejectInput ? (
-                    <>
-                        <button
-                            className="plan-review-btn plan-review-approve"
-                            onClick={handleApprove}
-                        >
-                            ✅ Approve Plan
-                        </button>
-                        <button
-                            className="plan-review-btn plan-review-reject"
-                            onClick={() => setShowRejectInput(true)}
-                        >
-                            ❌ Reject Plan
-                        </button>
-                    </>
-                ) : (
-                    <div className="plan-review-reject-form">
-                        <textarea
-                            className="plan-review-reject-input"
-                            placeholder="Reason for rejection..."
-                            value={rejectionReason}
-                            onChange={(e) => setRejectionReason(e.target.value)}
-                            rows={3}
-                        />
-                        <div className="plan-review-reject-actions">
-                            <button
-                                className="plan-review-btn plan-review-reject-submit"
-                                onClick={handleReject}
-                            >
-                                Submit Rejection
-                            </button>
-                            <button
-                                className="plan-review-btn plan-review-cancel"
-                                onClick={() => {
-                                    setShowRejectInput(false);
-                                    setRejectionReason('');
-                                }}
-                            >
-                                Cancel
-                            </button>
-                        </div>
+        <div className="modal-overlay">
+            <div className="plan-review-modal modal-content">
+                <div className="modal-header">
+                    <span className="modal-title">🤖 Plan Review: implementation_plan.md</span>
+                    <button className="modal-close" onClick={onCancel} title="Cancel Review">✕</button>
+                </div>
+                
+                <div className="plan-body modal-body scrollable">
+                    <div className={`plan-status-bar status-${status.toLowerCase().replace(/\s/g, '-')}`}>
+                        Current Status: {status}
                     </div>
-                )}
+
+                    <pre className="plan-content">
+                        {planSections.map((section, index) => {
+                            if (section.startsWith('#')) {
+                                return <h4 key={index} className="plan-header">{section.trim()}</h4>;
+                            }
+                            // Basic markdown rendering (just displays code/list items cleanly)
+                            return <p key={index} className="plan-text">{section.trim()}</p>;
+                        })}
+                    </pre>
+
+                    <p className="plan-warning">
+                        Review the entire plan above. Execution may modify files, run commands, and commit code. Proceed with caution.
+                    </p>
+                </div>
+                
+                <div className="modal-footer">
+                    <button className="btn btn-secondary" onClick={onCancel} disabled={status === 'Executing...'}>
+                        Cancel
+                    </button>
+                    <button 
+                        className="btn btn-primary" 
+                        onClick={() => {
+                            setStatus("Executing...");
+                            onExecute(); // Triggers execution chain in App.jsx
+                        }}
+                        disabled={status === 'Executing...' || status.startsWith('Error') || !initialPlanContent}
+                    >
+                        🚀 Approve and Execute
+                    </button>
+                </div>
             </div>
         </div>
     );

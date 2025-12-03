@@ -10,6 +10,7 @@ export default function TopBar({
     onTestSupabase,
     onToggleSidebar,
     onToggleBottomPanel,
+    onNewPlan, // NEW PROP
     sidebarCollapsed,
     bottomPanelCollapsed,
 }) {
@@ -36,6 +37,13 @@ export default function TopBar({
                     </button>
                     <button onClick={onNewFolder} title="New Folder">
                         📂 New Folder
+                    </button>
+                    <button 
+                        className="topbar-btn-accent" 
+                        onClick={onNewPlan} // NEW BUTTON ACTION
+                        title="Start a new AI Planning Session"
+                    >
+                        📝 Plan
                     </button>
                 </div>
             </div>

@@ -1,9 +1,140 @@
 // src/renderer/lib/tasks/manager.js
+import { executeTool } from "../tools/framework";
+
+// ---------------------------------------------------
+// PHASE 3.3: MULTI-STEP EXECUTION ENGINE
+// ---------------------------------------------------
 
 /**
- * Task Management System
- * Allows AI to create, update, and track tasks in markdown format
+ * Executes a single tool call, serving as the core wrapper for verification/rollback hooks.
+ * @param {string} toolName - The name of the tool to execute (e.g., 'readFile').
+ * @param {Object} params - The parameters provided by the AI tool call.
+ * @returns {Promise<Object>} The structured success result of the executed step.
  */
+async function executeStep(toolName, params) {
+    try {
+        const result = await executeTool(toolName, params);
+        
+        // Return a structured success object
+        return { success: true, tool: toolName, result };
+    } catch (error) {
+        // Phase 3.3: Implement Rollback on Errors (Placeholder)
+        console.error(`Execution step failed for tool ${toolName}. Triggering rollback...`, error);
+        
+        // Re-throw a detailed error to halt the chain
+        throw { success: false, tool: toolName, error: error.message || String(error) };
+    }
+}
+
+/**
+ * Implements the core Multi-Step Execution Engine.
+ * Executes a sequence of tool calls sequentially, stopping on the first error.
+ * @param {Array<{tool: string, params: Object}>} actionChain - Array of tool calls to execute.
+ * @returns {Promise<Array<Object>>} Array of successful results for each step.
+ */
+export async function executeChain(actionChain) {
+    const chainResults = [];
+    
+    for (const action of actionChain) {
+        console.log(`[Execution Engine] Running step: ${action.tool}`);
+        try {
+            const result = await executeStep(action.tool, action.params);
+            chainResults.push(result);
+            
+        } catch (stepError) {
+            throw stepError;
+        }
+    }
+    
+    return chainResults;
+}
+
+// ---------------------------------------------------
+// PHASE 3.1 & 3.2: TASK & PLAN FILE MANAGEMENT (Your Existing Logic + Fix)
+// ---------------------------------------------------
+
+// Helper for writing a file to the .aesop directory
+async function writeAesopFile(projectPath, fileName, markdown) {
+    const filePath = `${projectPath}/.aesop/${fileName}`;
+    try {
+        await window.aesop.fs.newFolder(`${projectPath}/.aesop`);
+    } catch (err) {
+        // Directory might already exist, ignore
+    }
+    await window.aesop.fs.writeFile(filePath, markdown);
+    return filePath;
+}
+
+// Helper for reading a file from the .aesop directory
+async function readAesopFile(projectPath, fileName) {
+    const filePath = `${projectPath}/.aesop/${fileName}`;
+    try {
+        const content = await window.aesop.fs.readFile(filePath);
+        return content;
+    } catch (err) {
+        return null; // File doesn't exist
+    }
+}
+
+
+/**
+ * Create a new implementation_plan.md file. (Phase 3.2 Export FIX)
+ * @param {string} projectPath - Path to project root
+ * @param {string} markdown - Raw markdown content
+ * @returns {Promise<string>} Path to created file
+ */
+export async function createPlanFile(projectPath, markdown) {
+    return writeAesopFile(projectPath, 'implementation_plan.md', markdown);
+}
+
+/**
+ * Read existing implementation_plan.md file. (Phase 3.2 Export FIX)
+ * @param {string} projectPath - Path to project root
+ * @returns {Promise<string>} Plan file content
+ */
+export async function readPlanFile(projectPath) {
+    return readAesopFile(projectPath, 'implementation_plan.md');
+}
+
+
+/**
+ * Create a new task.md file
+ * @param {string} projectPath - Path to project root
+ * @param {Object} taskData - Task structure
+ * @returns {Promise<string>} Path to created file
+ */
+export async function createTaskFile(projectPath, taskData) {
+    const { title, sections } = taskData;
+
+    let markdown = `# ${title}\n\n`;
+
+    for (const section of sections) {
+        markdown += `## ${section.title}\n\n`;
+
+        for (const subsection of section.subsections || []) {
+            markdown += `### ${subsection.title}\n`;
+
+            for (const task of subsection.tasks || []) {
+                const indent = '  '.repeat(task.indent || 0);
+                const checkbox = task.status === 'complete' ? '[x]' :
+                    task.status === 'in-progress' ? '[/]' : '[ ]';
+                markdown += `${indent}- ${checkbox} ${task.text}\n`;
+            }
+
+            markdown += '\n';
+        }
+    }
+    return writeAesopFile(projectPath, 'task.md', markdown);
+}
+
+/**
+ * Read existing task.md file
+ * @param {string} projectPath - Path to project root
+ * @returns {Promise<string>} Task file content
+ */
+export async function readTaskFile(projectPath) {
+    return readAesopFile(projectPath, 'task.md');
+}
 
 /**
  * Parse a task.md file and return structured data
@@ -106,63 +237,6 @@ export function getTaskProgress(tasks) {
         pending: total - completed - inProgress,
         percentage: total > 0 ? Math.round((completed / total) * 100) : 0
     };
-}
-
-/**
- * Create a new task.md file
- * @param {string} projectPath - Path to project root
- * @param {Object} taskData - Task structure
- * @returns {Promise<string>} Path to created file
- */
-export async function createTaskFile(projectPath, taskData) {
-    const { title, sections } = taskData;
-
-    let markdown = `# ${title}\n\n`;
-
-    for (const section of sections) {
-        markdown += `## ${section.title}\n\n`;
-
-        for (const subsection of section.subsections || []) {
-            markdown += `### ${subsection.title}\n`;
-
-            for (const task of subsection.tasks || []) {
-                const indent = '  '.repeat(task.indent || 0);
-                const checkbox = task.status === 'complete' ? '[x]' :
-                    task.status === 'in-progress' ? '[/]' : '[ ]';
-                markdown += `${indent}- ${checkbox} ${task.text}\n`;
-            }
-
-            markdown += '\n';
-        }
-    }
-
-    // Write to .aesop/task.md
-    const taskPath = `${projectPath}/.aesop/task.md`;
-
-    try {
-        // Ensure .aesop directory exists
-        await window.aesop.fs.mkdir(`${projectPath}/.aesop`);
-    } catch (err) {
-        // Directory might already exist, ignore
-    }
-
-    await window.aesop.fs.writeFile(taskPath, markdown);
-    return taskPath;
-}
-
-/**
- * Read existing task.md file
- * @param {string} projectPath - Path to project root
- * @returns {Promise<string>} Task file content
- */
-export async function readTaskFile(projectPath) {
-    const taskPath = `${projectPath}/.aesop/task.md`;
-    try {
-        const content = await window.aesop.fs.readFile(taskPath);
-        return content;
-    } catch (err) {
-        return null; // File doesn't exist
-    }
 }
 
 /**
