@@ -1,0 +1,246 @@
+/* Plan Review Component Styles */
+.plan-review {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: var(--panel-dark);
+    overflow: hidden;
+}
+
+.plan-review-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    background: var(--panel-dark);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.plan-review-header h2 {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-light);
+}
+
+.plan-review-close-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: var(--radius);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.plan-review-close-btn:hover {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: white;
+}
+
+.plan-review-content {
+    flex: 1;
+    padding: var(--space-4);
+    overflow-y: auto;
+    background: var(--bg-light);
+    font-family: var(--font-base);
+    line-height: var(--line-height-relaxed);
+}
+
+.plan-review-content h1 {
+    font-size: var(--font-size-2xl);
+    color: var(--text-light);
+    margin: var(--space-4) 0 var(--space-2) 0;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: var(--space-2);
+}
+
+.plan-review-content h2 {
+    font-size: var(--font-size-xl);
+    color: var(--text-light);
+    margin: var(--space-3) 0 var(--space-2) 0;
+}
+
+.plan-review-content h3 {
+    font-size: var(--font-size-lg);
+    color: var(--accent-primary);
+    margin: var(--space-3) 0 var(--space-2) 0;
+}
+
+.plan-review-content h4 {
+    font-size: var(--font-size-base);
+    color: var(--text-secondary);
+    margin: var(--space-2) 0 var(--space-1) 0;
+    font-family: var(--font-mono);
+}
+
+.plan-review-content p {
+    margin: var(--space-2) 0;
+    color: var(--text-light);
+}
+
+.plan-review-content li {
+    margin: var(--space-1) 0;
+    margin-left: var(--space-4);
+    color: var(--text-light);
+}
+
+.plan-review-content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: var(--space-4) 0;
+}
+
+.plan-review-content blockquote {
+    margin: var(--space-2) 0;
+    padding: var(--space-2) var(--space-3);
+    border-left: 4px solid var(--accent-primary);
+    background: var(--panel);
+    color: var(--text-secondary);
+}
+
+.plan-review-content .alert {
+    padding: var(--space-3);
+    margin: var(--space-2) 0;
+    border-radius: var(--radius);
+    border-left: 4px solid;
+}
+
+.plan-review-content .alert-important {
+    background: rgba(100, 150, 255, 0.1);
+    border-color: var(--accent-primary);
+    color: var(--text-light);
+}
+
+.plan-review-content .alert-warning {
+    background: rgba(255, 200, 0, 0.1);
+    border-color: #ffc800;
+    color: var(--text-light);
+}
+
+.plan-review-content .alert-caution {
+    background: rgba(255, 100, 100, 0.1);
+    border-color: var(--danger);
+    color: var(--text-light);
+}
+
+.plan-review-actions {
+    padding: var(--space-4);
+    background: var(--panel-dark);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: var(--space-3);
+    flex-shrink: 0;
+}
+
+.plan-review-btn {
+    padding: var(--space-3) var(--space-5);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    border: none;
+    flex: 1;
+}
+
+.plan-review-approve {
+    background: var(--success);
+    color: white;
+}
+
+.plan-review-approve:hover {
+    background: var(--success-hover);
+    transform: translateY(-1px);
+}
+
+.plan-review-reject {
+    background: var(--danger);
+    color: white;
+}
+
+.plan-review-reject:hover {
+    background: var(--danger-hover);
+    transform: translateY(-1px);
+}
+
+.plan-review-reject-form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.plan-review-reject-input {
+    width: 100%;
+    padding: var(--space-3);
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    color: var(--text-light);
+    font-family: var(--font-base);
+    font-size: var(--font-size-sm);
+    border-radius: var(--radius);
+    resize: vertical;
+}
+
+.plan-review-reject-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+}
+
+.plan-review-reject-actions {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.plan-review-reject-submit {
+    background: var(--danger);
+    color: white;
+}
+
+.plan-review-reject-submit:hover {
+    background: var(--danger-hover);
+}
+
+.plan-review-cancel {
+    background: var(--panel);
+    color: var(--text-light);
+    border: 1px solid var(--border);
+}
+
+.plan-review-cancel:hover {
+    background: var(--panel-light);
+}
+
+.plan-review-loading,
+.plan-review-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: var(--font-size-lg);
+    color: var(--text-secondary);
+}
+
+.plan-review-close {
+    margin-top: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text-light);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.plan-review-close:hover {
+    background: var(--panel-light);
+}

@@ -45,7 +45,7 @@
 
     /* === Typography === */
     --font-mono: "JetBrains Mono", "Consolas", "Courier New", monospace;
-    --font-sans: \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", sans-serif;
+    --font-sans: \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", sans-serif;
 
     --font-size-xs: 11px;
     --font-size-sm: 12px;

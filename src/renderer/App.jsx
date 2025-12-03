@@ -16,6 +16,8 @@ import { getRoot, openFolderDialog } from "./lib/project";
 import { readFile, writeFile, newFile, newFolder } from "./lib/fileSystem";
 import { testSupabase } from "./lib/supabase";
 import { scanProject } from "./lib/codebase/indexer";
+// NEW IMPORT: Required for the automatic file search logic
+import { findFilesByName } from "./lib/codebase/search";
 
 export default function App() {
     const [rootPath, setRootPath] = useState("");
@@ -364,6 +366,95 @@ export default function App() {
         }
     }
 
+    // -----------------------------------------------------------
+    // NEW LOGIC START: AUTOMATIC OPEN-ON-COMMAND
+    // -----------------------------------------------------------
+
+    /**
+     * Logic to choose the best file when multiple matches are found.
+     * Prefers non-backup files and files closer to the project root (less deep).
+     * @param {Array<{path: string, name: string}>} files - List of candidate file objects.
+     * @returns {string|null} The path of the best candidate or null.
+     */
+    const selectBestCandidate = (files) => {
+        if (!files || files.length === 0) return null;
+
+        // 1. Filter out obvious backup/lock files
+        const nonBackupPaths = files.filter(
+            (file) =>
+                !file.path.toLowerCase().includes('backup') &&
+                !file.path.toLowerCase().includes('.bak') &&
+                !file.path.startsWith('~') &&
+                !file.path.endsWith('.bak')
+        );
+
+        let candidates = nonBackupPaths.length > 0 ? nonBackupPaths : files;
+
+        // 2. Sort: prefer shallowest depth (fewer '/' or '\' characters)
+        candidates.sort((a, b) => {
+            const pathA = a.path;
+            const pathB = b.path;
+            // Count separators to approximate depth (normalized paths use '/')
+            const depthA = (pathA.match(/[\\/]/g) || []).length;
+            const depthB = (pathB.match(/[\\/]/g) || []).length;
+            
+            // Prefer less depth
+            return depthA - depthB;
+        });
+
+        // The best candidate is the one left after filtering and sorting
+        return candidates[0].path;
+    };
+
+
+    /**
+     * Executes the hardcoded open-file workflow triggered by a natural language command.
+     * @param {string} token - The file name/part provided by the user (e.g., 'ipchandlers').
+     * @param {Function} appendMessage - Function to send a message back to the PromptPanel chat.
+     * @returns {Promise<void>}
+     */
+    const autoOpenFileAndMessage = async (token, appendMessage) => {
+        if (!codebaseIndex || codebaseIndex.length === 0) {
+            appendMessage("assistant", "Project index unavailable. Cannot automatically find and open files. Try opening a folder first.");
+            return;
+        }
+
+        try {
+            // 1. Run findFilesByName (simulates tool call but uses local index)
+            const pattern = `*${token}*`;
+            const foundFiles = findFilesByName(pattern, codebaseIndex);
+
+            if (foundFiles.length === 0) {
+                appendMessage("assistant", `File not found: Could not locate a file matching **${token}**.`);
+                return;
+            }
+
+            // 2. Choose best candidate (prefer non-backup, shallowest)
+            const chosenPath = selectBestCandidate(foundFiles);
+
+            if (!chosenPath) {
+                appendMessage("assistant", `Could not determine the best file to open for **${token}**.`);
+                return;
+            }
+
+            // 3. & 4. Read and open the file using existing App logic, then send message
+            await openFileByPath(chosenPath, null); // null content forces read from disk
+
+            // This is the friendly message shown instead of raw tool JSON
+            appendMessage("assistant", `Opened file: **${chosenPath}**`);
+
+        } catch (err) {
+            console.error("[Automatic Open Error]", err);
+            // Inform the user of a technical failure
+            appendMessage("assistant", `Error during automatic open: ${err.message}`);
+        }
+    };
+
+    // -----------------------------------------------------------
+    // NEW LOGIC END
+    // -----------------------------------------------------------
+
+
     const activeTab = findTab(activePath);
 
     return (
@@ -419,6 +510,8 @@ export default function App() {
                     <PromptPanel
                         onClose={() => setPromptOpen(false)}
                         onApplyCode={handleApplyCode}
+                        // NEW PROP PASSED TO PROMPT PANEL
+                        onOpenCommand={autoOpenFileAndMessage}
                         activeTab={activeTab}
                         rootPath={rootPath}
                         codebaseIndex={codebaseIndex}
