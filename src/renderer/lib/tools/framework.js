@@ -140,4 +140,39 @@ registerTool({
   }
 });
 
+// Planning Tools
+import { createPlan, readPlan, approvePlan, rejectPlan, hasPendingPlan } from '../planning/planner.js';
+
+registerTool({
+  name: 'createPlan',
+  description: 'Create an implementation plan for user review',
+  params: {
+    planData: { type: 'object', required: true }
+  },
+  fn: async ({ planData }) => {
+    const projectPath = '.'; // Current project
+    return await createPlan(projectPath, planData);
+  }
+});
+
+registerTool({
+  name: 'readPlan',
+  description: 'Read the current implementation plan',
+  params: {},
+  fn: async () => {
+    const projectPath = '.';
+    return await readPlan(projectPath);
+  }
+});
+
+registerTool({
+  name: 'checkPendingPlan',
+  description: 'Check if there is a pending plan awaiting approval',
+  params: {},
+  fn: async () => {
+    const projectPath = '.';
+    return { hasPending: await hasPendingPlan(projectPath) };
+  }
+});
+
 export default { registerTool, getTool, listTools, executeTool };

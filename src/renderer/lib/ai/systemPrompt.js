@@ -31,6 +31,12 @@ You can use the following tools by outputting a JSON block with the tool name an
    - params: {}
 9. **updateTask**: Update a task's status.
    - params: { "taskText": "Task description", "status": "complete" }
+10. **createPlan**: Create an implementation plan for user review.
+   - params: { "planData": { "title": "Plan Title", "description": "...", "changes": [...], "verification": {...} } }
+11. **readPlan**: Read the current implementation plan.
+   - params: {}
+12. **checkPendingPlan**: Check if there's a pending plan awaiting approval.
+   - params: {}
 
 ### INTERACTION RULES
 
