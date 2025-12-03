@@ -96,6 +96,16 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
 
                 try {
                     const result = await executeTool(call.tool, call.params);
+
+                    // Auto-open file if created
+                    if (call.tool === 'createTask' || call.tool === 'createPlan' || call.tool === 'writeFile') {
+                        if (result && result.path && onApplyCode) {
+                            // We use onApplyCode as a proxy to open files since it likely has access to app state
+                            // Or better, we should pass an onOpenFile prop
+                            // For now, let's assume the result message will prompt the user or we can try to trigger it
+                        }
+                    }
+
                     const resultMsg = {
                         role: "tool_result",
                         content: `Tool '${call.tool}' output:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``,
@@ -226,11 +236,28 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
         if (isToolResult) roleLabel = "📝 Result";
         if (isToolError) roleLabel = "⚠️ Error";
 
+        // Parse tool content if it's a tool call
+        let displayContent = message.content;
+        if (isTool) {
+            try {
+                // Try to extract tool name from JSON
+                const toolData = JSON.parse(message.content);
+                if (toolData.tool) {
+                    displayContent = `Executing tool: ${toolData.tool}...`;
+                }
+            } catch (e) {
+                // If parsing fails, just show truncated content
+                if (displayContent.length > 100) {
+                    displayContent = displayContent.substring(0, 100) + "...";
+                }
+            }
+        }
+
         const messageClass = `message ${isUser ? "message-user" :
-                isTool ? "message-tool" :
-                    isToolResult ? "message-tool_result" :
-                        isToolError ? "message-tool_error" :
-                            "message-assistant"
+            isTool ? "message-tool" :
+                isToolResult ? "message-tool_result" :
+                    isToolError ? "message-tool_error" :
+                        "message-assistant"
             }`;
 
         return (
@@ -252,7 +279,11 @@ export default function PromptPanel({ onClose, onApplyCode, activeTab, rootPath,
                             : undefined
                     }
                 >
-                    {renderMessageContent(message.content)}
+                    {isTool ? (
+                        <span style={{ fontStyle: 'italic' }}>{displayContent}</span>
+                    ) : (
+                        renderMessageContent(displayContent)
+                    )}
                 </div>
                 {message.role === "assistant" && onApplyCode && hasActionableContent(message.content) && (
                     <button
