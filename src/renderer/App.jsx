@@ -48,30 +48,31 @@ export default function App() {
     useEffect(() => {
         function handleKeyDown(e) {
             // Ctrl+B: Toggle sidebar
-            if (e.ctrlKey && e.key === 'b') {
+            if (e.ctrlKey && e.key === "b") {
                 e.preventDefault();
-                setSidebarCollapsed(prev => !prev);
+                setSidebarCollapsed((prev) => !prev);
             }
             // Ctrl+`: Toggle bottom panel
-            if (e.ctrlKey && e.key === '`') {
+            if (e.ctrlKey && e.key === "`") {
                 e.preventDefault();
-                setBottomPanelCollapsed(prev => !prev);
+                setBottomPanelCollapsed((prev) => !prev);
             }
             // Ctrl+S: Save active file
-            if (e.ctrlKey && e.key === 's') {
+            if (e.ctrlKey && e.key === "s") {
                 e.preventDefault();
                 saveActiveFile();
             }
         }
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
     }, [activePath, tabs]);
 
     function findTab(path) {
         return tabs.find((t) => t.path === path);
     }
 
+    // Open a file from the file tree on the left
     async function openFileNode(node) {
         if (!node || !node.path || node.isDirectory) return;
 
@@ -101,6 +102,65 @@ export default function App() {
         }
     }
 
+    // Open or create a tab for a specific path, using AI content if provided
+    async function openFileByPath(path, aiContent = null) {
+        if (!path || typeof path !== "string") {
+            setStatusMessage("AI did not provide a valid target file path");
+            return;
+        }
+
+        const existingTab = findTab(path);
+
+        try {
+            // Always try to read the existing file content from disk first
+            let diskContent = "";
+            try {
+                diskContent = await readFile(path);
+            } catch {
+                // If file does not exist yet, leave diskContent as empty string
+                diskContent = "";
+            }
+
+            const newContent = aiContent != null ? aiContent : diskContent;
+
+            if (existingTab) {
+                // Update existing tab with AI content or disk content
+                const updatedTab = {
+                    ...existingTab,
+                    content: newContent,
+                    isDirty: newContent !== existingTab.originalContent,
+                };
+                setTabs((prev) =>
+                    prev.map((t) => (t.path === path ? updatedTab : t))
+                );
+            } else {
+                // Create new tab
+                const name = path.split(/[\\/]/).pop() || path;
+                const newTab = {
+                    path,
+                    name,
+                    content: newContent,
+                    originalContent: diskContent,
+                    isDirty: newContent !== diskContent,
+                };
+                setTabs((prev) => [...prev, newTab]);
+            }
+
+            setActivePath(path);
+
+            if (aiContent != null) {
+                setStatusMessage(
+                    `AI changes staged in ${path}. Review in the editor and save when ready.`
+                );
+            } else {
+                setStatusMessage(`Opened ${path}`);
+            }
+        } catch (err) {
+            console.error("openFileByPath error:", err);
+            setStatusMessage("Error preparing AI changes");
+        }
+    }
+
     function updateActiveContent(newContent) {
         if (!activePath) return;
         setTabs((prev) =>
@@ -109,7 +169,7 @@ export default function App() {
                     ? {
                         ...t,
                         content: newContent,
-                        isDirty: newContent !== t.originalContent
+                        isDirty: newContent !== t.originalContent,
                     }
                     : t
             )
@@ -121,7 +181,6 @@ export default function App() {
         if (!tab) return;
         try {
             await writeFile(tab.path, tab.content);
-            // Update tab to mark as saved
             setTabs((prev) =>
                 prev.map((t) =>
                     t.path === activePath
@@ -172,7 +231,7 @@ export default function App() {
                     console.error("newFile error:", err);
                     setStatusMessage("Error creating file");
                 }
-            }
+            },
         });
     }
 
@@ -190,7 +249,7 @@ export default function App() {
                     console.error("newFolder error:", err);
                     setStatusMessage("Error creating folder");
                 }
-            }
+            },
         });
     }
 
@@ -208,15 +267,72 @@ export default function App() {
         }
     }
 
-    async function handleApplyCode(code) {
-        if (!activePath) {
-            setStatusMessage("No file open to apply code");
+    // Parse "AesopIDE target file: some/path.tsx" from AI response
+    function extractTargetPath(aiText, fallbackPath) {
+        if (!aiText || typeof aiText !== "string") return fallbackPath || null;
+        const match = aiText.match(/AesopIDE target file:\s*([^\n\r]+)/i);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+        return fallbackPath || null;
+    }
+
+    // Extract the first fenced code block from AI response
+    function extractCodeFromAi(aiText) {
+        if (!aiText || typeof aiText !== "string") return null;
+
+        const fenced = aiText.match(/```(?:[a-zA-Z0-9]+)?\s*\n([\s\S]*?)```/);
+        if (fenced && fenced[1]) {
+            return fenced[1].trim();
+        }
+
+        return null;
+    }
+
+    // Called when you click "Apply to file" on an AI message
+    async function handleApplyCode(aiText) {
+        if (!aiText || typeof aiText !== "string") {
+            setStatusMessage("AI response invalid");
             return;
         }
 
-        // Update content of active tab
-        updateActiveContent(code);
-        setStatusMessage("Code applied to " + activePath);
+        // Check for open only command: "AesopIDE open file: path"
+        const openMatch = aiText.match(/AesopIDE open file:\s*([^\n\r]+)/i);
+        if (openMatch && openMatch[1]) {
+            const path = openMatch[1].trim();
+            try {
+                await openFileByPath(path, null);
+                setStatusMessage("Opened " + path + " as requested by AI");
+            } catch (err) {
+                console.error("open only error:", err);
+                setStatusMessage("Failed to open file");
+            }
+            return;
+        }
+
+        // Normal edit flow using "AesopIDE target file" and a code block
+        const fallbackPath = activePath || null;
+        const targetPath = extractTargetPath(aiText, fallbackPath);
+
+        if (!targetPath) {
+            setStatusMessage(
+                "AI response did not specify a target file and there is no active file."
+            );
+            return;
+        }
+
+        const newContent = extractCodeFromAi(aiText);
+        if (!newContent) {
+            setStatusMessage("AI response did not contain a code block to apply.");
+            return;
+        }
+
+        try {
+            await openFileByPath(targetPath, newContent);
+        } catch (err) {
+            console.error("handleApplyCode error:", err);
+            setStatusMessage("Error applying AI changes");
+        }
     }
 
     const activeTab = findTab(activePath);
@@ -230,13 +346,18 @@ export default function App() {
                 onOpenPrompt={() => setPromptOpen(true)}
                 onTestSupabase={handleTestSupabase}
                 onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-                onToggleBottomPanel={() => setBottomPanelCollapsed(!bottomPanelCollapsed)}
+                onToggleBottomPanel={() =>
+                    setBottomPanelCollapsed(!bottomPanelCollapsed)
+                }
                 sidebarCollapsed={sidebarCollapsed}
                 bottomPanelCollapsed={bottomPanelCollapsed}
             />
 
             <div className="app-main">
-                <div className={`app-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+                <div
+                    className={`app-sidebar ${sidebarCollapsed ? "collapsed" : ""}`}
+                    style={{ width: sidebarCollapsed ? 0 : sidebarWidth }}
+                >
                     <FileTree rootPath={rootPath} onOpenFile={openFileNode} />
                 </div>
 
@@ -254,15 +375,23 @@ export default function App() {
                         onSave={saveActiveFile}
                     />
 
-                    <div className={`bottom-panels ${bottomPanelCollapsed ? 'collapsed' : ''}`}>
+                    <div
+                        className={`bottom-panels ${bottomPanelCollapsed ? "collapsed" : ""
+                            }`}
+                        style={{
+                            height: bottomPanelCollapsed ? 0 : bottomPanelHeight,
+                        }}
+                    >
                         <BottomPanel />
                     </div>
                 </div>
 
-                <div className={`app-right-sidebar ${!promptOpen ? 'collapsed' : ''}`}>
+                <div className={`app-right-sidebar ${!promptOpen ? "collapsed" : ""}`}>
                     <PromptPanel
                         onClose={() => setPromptOpen(false)}
                         onApplyCode={handleApplyCode}
+                        activeTab={activeTab}
+                        rootPath={rootPath}
                     />
                 </div>
             </div>
