@@ -8,7 +8,8 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
 // CRITICAL FIX: Simplest, most stable CommonJS import for nanoid to prevent crash
-const nanoid = require('nanoid/non-secure');
+// FIX: Correctly extract the nanoid function from the required module object.
+const { nanoid } = require('nanoid/non-secure');
 
 // Track current project root (folder opened in the IDE)
 let currentRoot = process.cwd();

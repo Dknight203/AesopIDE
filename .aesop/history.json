@@ -28,5 +28,15 @@
     "role": "assistant",
     "content": "Okay, I've written `test.txt`. What would you like to do next, or what is the overall task you're trying to accomplish?",
     "timestamp": "2025-12-03T19:53:37.928Z"
+  },
+  {
+    "role": "user",
+    "content": "The core component pattern we use is functional components with hooks. Remember this.",
+    "timestamp": "2025-12-03T20:03:18.686Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Hello! I'm ready to assist you. Please tell me what you'd like to work on today.",
+    "timestamp": "2025-12-03T20:03:19.628Z"
   }
 ]
