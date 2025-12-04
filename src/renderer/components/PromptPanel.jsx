@@ -6,6 +6,7 @@ import { SYSTEM_PROMPT } from "../lib/ai/systemPrompt";
 import { buildFileContext } from "../lib/codebase/context";
 import parseToolCalls from "../lib/ai/toolParser";
 import { executeTool } from "../lib/tools/framework";
+import ContextMenu from "./ContextMenu";
 
 
 export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activeTab, rootPath, codebaseIndex, initialPrompt, onClearInitialPrompt }) {
@@ -22,6 +23,9 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+    const messagesContainerRef = useRef(null); // <-- ADDED REF
+    
+    const [promptContextMenu, setPromptContextMenu] = useState(null);
 
     // NEW STATE: For Project Knowledge (Local)
     const [projectKnowledge, setProjectKnowledge] = useState({});
@@ -300,6 +304,90 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             }
         }
     }
+
+function handlePromptContextMenu(e) {
+    // CRITICAL FIX: Always prevent the default context menu to ensure our custom one is reliable.
+    e.preventDefault(); 
+    
+    const textarea = inputRef.current;
+    // Determine if text is selected to enable Cut/Copy
+    const hasSelection = textarea && textarea.selectionStart !== textarea.selectionEnd;
+    
+    const items = [
+        {
+            label: 'Cut',
+            icon: '✂️',
+            shortcut: 'Ctrl+X',
+            disabled: !hasSelection,
+            onClick: () => {
+                document.execCommand('cut');
+            }
+        },
+        {
+            label: 'Copy',
+            icon: '📋',
+            shortcut: 'Ctrl+C',
+            disabled: !hasSelection,
+            onClick: () => {
+                document.execCommand('copy');
+            }
+        },
+        {
+            label: 'Paste',
+            icon: '📄',
+            shortcut: 'Ctrl+V',
+            onClick: () => {
+                document.execCommand('paste');
+            }
+        },
+        { separator: true },
+        {
+            label: 'Clear',
+            icon: '🗑️',
+            onClick: () => {
+                setInput('');
+            }
+        },
+        {
+            label: 'Select All',
+            icon: '🔲',
+            shortcut: 'Ctrl+A',
+            onClick: () => {
+                if (textarea) {
+                    textarea.select();
+                }
+            }
+        }
+    ];
+    
+    setPromptContextMenu({ x: e.clientX, y: e.clientY, items });
+}
+
+// <-- ADDED MESSAGE CONTEXT HANDLER -->
+function handleMessageContextMenu(e) {
+    // CRITICAL FIX: Always prevent the default context menu
+    e.preventDefault(); 
+
+    // This targets the text that the user might have selected in the message content
+    const selectedText = window.getSelection().toString();
+    const hasSelection = selectedText.length > 0;
+    
+    const items = [
+        {
+            label: 'Copy Selected Text',
+            icon: '📋',
+            disabled: !hasSelection,
+            onClick: () => {
+                // Rely on the browser's native copy command for selected text
+                document.execCommand('copy');
+            }
+        }
+    ];
+    
+    setPromptContextMenu({ x: e.clientX, y: e.clientY, items });
+}
+// <-- END MESSAGE CONTEXT HANDLER -->
+
 
     async function processAiTurn(userPrompt, history) {
         // Build context
@@ -624,7 +712,11 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             </div>
 
 
-            <div className="prompt-messages scrollable">
+            <div 
+                className="prompt-messages scrollable"
+                ref={messagesContainerRef} // <-- ATTACHED REF
+                onContextMenu={handleMessageContextMenu} // <-- ATTACHED HANDLER
+            >
                 {messages.map((msg, idx) => renderMessage(msg, idx))}
                 {isLoading && (
                     <div className="message message-assistant">
@@ -648,6 +740,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                 <textarea
                     ref={inputRef}
                     className="prompt-input"
+                    onContextMenu={handlePromptContextMenu}
                     placeholder="Ask me anything. Use Shift Enter for a new line."
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
@@ -663,6 +756,14 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                     {isLoading ? "⏳" : "📤"} Send
                 </button>
             </div>
+            {promptContextMenu && (
+                <ContextMenu
+                    x={promptContextMenu.x}
+                    y={promptContextMenu.y}
+                    items={promptContextMenu.items}
+                    onClose={() => setPromptContextMenu(null)}
+                />
+            )}
         </div>
     );
 }
