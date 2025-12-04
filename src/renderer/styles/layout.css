@@ -97,7 +97,7 @@
 /* === Editor Content === */
 .editor-content {
     flex: 1;
-    overflow: hidden;
+    overflow: auto;  /* ← CHANGED */
     position: relative;
 }
 
