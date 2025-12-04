@@ -33,7 +33,38 @@ export default function IngestModal({ onClose, onIngest }) {
                 const json = await response.json();
                 content = JSON.stringify(json, null, 2);
             } else {
-                content = await response.text();
+                const rawContent = await response.text();
+
+                // If it's HTML, extract text content only (strip tags)
+                if (contentType?.includes('text/html') || rawContent.trim().startsWith('<!DOCTYPE') || rawContent.trim().startsWith('<html')) {
+                    setStatusMessage('Extracting text from HTML...');
+
+                    // Use DOMParser to extract text from HTML
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(rawContent, 'text/html');
+
+                    // Remove script and style elements
+                    doc.querySelectorAll('script, style, noscript').forEach(el => el.remove());
+
+                    // Get text content
+                    content = doc.body.textContent || doc.body.innerText || '';
+
+                    // Clean up whitespace
+                    // 1. Replace multiple spaces/tabs with a single space (but keep newlines)
+                    content = content.replace(/[ \t]+/g, ' ');
+
+                    // 2. Replace multiple newlines with a double newline (paragraph break)
+                    content = content.replace(/\n\s*\n/g, '\n\n');
+
+                    // 3. Trim
+                    content = content.trim();
+
+                    if (!content) {
+                        throw new Error('No text content found in HTML');
+                    }
+                } else {
+                    content = rawContent;
+                }
             }
 
             // Call the ingestion handler

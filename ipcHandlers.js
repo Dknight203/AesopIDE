@@ -9,7 +9,7 @@ const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
 const { nanoid } = require('nanoid/non-secure');
 
-// 🌟 PHASE 4 & 6 TABLE NAMES
+// 検 PHASE 4 & 6 TABLE NAMES
 const GLOBAL_MEMORY_TABLE = "aesopide_global_memory"; 
 const DEVELOPER_LIBRARY_TABLE = "aesopide_developer_library"; // New table name for RAG chunks/embeddings
 
@@ -73,7 +73,7 @@ function getGeminiModel() {
     return geminiModel;
 }
 
-// 🌟 NEW: Embedding model instance for RAG (uses a fast, dedicated model)
+// 検 NEW: Embedding model instance for RAG (uses a fast, dedicated model)
 let embeddingModel = null;
 function getEmbeddingModel() {
     const apiKey =
@@ -90,24 +90,46 @@ function getEmbeddingModel() {
 }
 
 // ---------------------------------------------------------------------------
-// 🌟 NEW RAG HELPER: Simple Text Chunking (Placeholder for future complexity)
+// 🌟 NEW RAG HELPER: Robust Text Chunking
 // ---------------------------------------------------------------------------
 function simpleTextChunker(content, chunkSize = 500) {
-    // For now, use a simple split based on newlines and then enforce max size
-    const sentences = content.split('\n').filter(s => s.trim().length > 0);
+    // 1. Split by newlines first to preserve paragraph structure
+    const lines = content.split('\n');
     const chunks = [];
     let currentChunk = '';
 
-    for (const sentence of sentences) {
-        if ((currentChunk.length + sentence.length) > chunkSize) {
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+
+        // If a single line is too long, force split it
+        if (trimmedLine.length > chunkSize) {
+            // Push current buffer if any
+            if (currentChunk.length > 0) {
+                chunks.push(currentChunk.trim());
+                currentChunk = '';
+            }
+            
+            // Split the long line into chunks
+            let remaining = trimmedLine;
+            while (remaining.length > 0) {
+                chunks.push(remaining.substring(0, chunkSize));
+                remaining = remaining.substring(chunkSize);
+            }
+        } 
+        // If adding this line exceeds chunk size, push current and start new
+        else if ((currentChunk.length + trimmedLine.length + 1) > chunkSize) {
             if (currentChunk.length > 0) {
                 chunks.push(currentChunk.trim());
             }
-            currentChunk = sentence;
-        } else {
-            currentChunk += (currentChunk.length > 0 ? ' ' : '') + sentence;
+            currentChunk = trimmedLine;
+        } 
+        // Otherwise append to current
+        else {
+            currentChunk += (currentChunk.length > 0 ? ' ' : '') + trimmedLine;
         }
     }
+
     if (currentChunk.length > 0) {
         chunks.push(currentChunk.trim());
     }
@@ -366,7 +388,7 @@ function registerIpcHandlers() {
             // Use a fixed key (e.g., 'developer_insights') to store global memory for the user
             const fixedKey = 'global_developer_insights'; 
             
-            // 🌟 CRITICAL FIX: Use simplified table name
+            // 検 CRITICAL FIX: Use simplified table name
             const { error } = await supabase
                 .from(GLOBAL_MEMORY_TABLE) 
                 .upsert({ key: fixedKey, data: knowledge }, { onConflict: 'key' }); 
@@ -385,7 +407,7 @@ function registerIpcHandlers() {
             const supabase = getSupabaseClient();
             const fixedKey = 'global_developer_insights'; 
 
-            // 🌟 CRITICAL FIX: Use simplified table name
+            // 検 CRITICAL FIX: Use simplified table name
             const { data, error } = await supabase
                 .from(GLOBAL_MEMORY_TABLE)
                 .select('data')
@@ -409,7 +431,7 @@ function registerIpcHandlers() {
     });
 
     // ---------------------------------------------------------------------------
-    // 🌟 PHASE 6: DOCUMENT INGESTION SERVICE (RAG BACKEND)
+    // 検 PHASE 6: DOCUMENT INGESTION SERVICE (RAG BACKEND)
     // ---------------------------------------------------------------------------
     const DEVELOPER_LIBRARY_TABLE = "aesopide_developer_library"; 
 
@@ -421,7 +443,7 @@ function registerIpcHandlers() {
         const sourceUrl = source || 'local_document';
 
         try {
-            const chunks = simpleTextChunker(content);
+            const chunks = simpleTextChunker(content, 300);  // Smaller chunks
             const supabase = getSupabaseClient();
             const embedder = getEmbeddingModel();
             const embeddingsToInsert = [];
@@ -431,7 +453,7 @@ function registerIpcHandlers() {
             for (const chunk of chunks) {
                 // 1. Generate Vector Embedding
                 // Note: The GenAI SDK for embeddings returns a response object
-                const embeddingResponse = await embedder.embedContent({ content: chunk });
+                const embeddingResponse = await embedder.embedContent(chunk);
                 // The actual vector array is nested within the response
                 const embedding = embeddingResponse.embedding.values;
 
@@ -469,7 +491,7 @@ function registerIpcHandlers() {
     });
 
 // ---------------------------------------------------------------------------
-// 🌟 PHASE 6.2: DEVELOPER LIBRARY QUERY (RAG RETRIEVAL)
+// 検 PHASE 6.2: DEVELOPER LIBRARY QUERY (RAG RETRIEVAL)
 // ---------------------------------------------------------------------------
 ipcMain.handle("developerLibrary:query", async (event, { question }) => {
     if (!question || typeof question !== 'string') {
@@ -479,7 +501,7 @@ ipcMain.handle("developerLibrary:query", async (event, { question }) => {
     try {
         // 1. Generate embedding for the user's question
         const embedder = getEmbeddingModel();
-        const embeddingResponse = await embedder.embedContent({ content: question });
+        const embeddingResponse = await embedder.embedContent(question);
         const queryVector = embeddingResponse.embedding.values;
 
         if (!queryVector || queryVector.length !== 768) {
