@@ -29,3 +29,8 @@ export async function newFolder(relPath) {
   ensureBridge();
   return await window.aesop.fs.newFolder(relPath);
 }
+
+export async function deleteFile(relPath) {
+  ensureBridge();
+  return await window.aesop.fs.deleteFile(relPath);
+}

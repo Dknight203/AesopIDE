@@ -263,6 +263,28 @@ function registerIpcHandlers() {
         return { ok: true, path: relPath };
     });
 
+    ipcMain.handle("fs:deleteFile", async (event, arg) => {
+        const root = ensureRoot();
+        const relPath = normalizeRelPath(arg, ["filePath", "path"]);
+        if (!relPath || typeof relPath !== "string") {
+            throw new Error("fs:deleteFile requires a relative path string");
+        }
+
+        const fullPath = path.resolve(root, relPath);
+        
+        try {
+            const stats = await fs.stat(fullPath);
+            if (stats.isDirectory()) {
+                await fs.rm(fullPath, { recursive: true, force: true });
+            } else {
+                await fs.unlink(fullPath);
+            }
+            return { ok: true, path: relPath };
+        } catch (err) {
+            throw new Error(`Failed to delete ${relPath}: ${err.message}`);
+        }
+    });
+
     // ---------------------------------------------------------------------------
     // PHASE 4.1: CONVERSATION HISTORY
     // ---------------------------------------------------------------------------

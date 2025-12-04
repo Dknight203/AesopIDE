@@ -1,7 +1,9 @@
 // src/renderer/components/FileTree.jsx
 import React, { useEffect, useState } from "react";
 import "../styles/sidebar.css";
-import { readDirectory } from "../lib/fileSystem";
+import { readDirectory, deleteFile } from "../lib/fileSystem";
+import ContextMenu from "./ContextMenu";
+import ConfirmModal from "./ConfirmModal";
 
 function joinPath(base, name) {
     if (!base || base === ".") return name;
@@ -36,7 +38,7 @@ function getFileIcon(name, isDirectory) {
     return iconMap[ext] || '📄';
 }
 
-function NodeRow({ node, level, onOpenFile, onToggleFolder }) {
+function NodeRow({ node, level, onOpenFile, onToggleFolder, onContextMenu }) {
     const indent = { paddingLeft: `${8 + level * 16}px` };
     const isDir = node.isDirectory;
     const icon = isDir
@@ -57,6 +59,7 @@ function NodeRow({ node, level, onOpenFile, onToggleFolder }) {
                     onOpenFile(node);
                 }
             }}
+            onContextMenu={(e) => onContextMenu(e, node)}
         >
             {chevron && <span className="filetree-chevron">{chevron}</span>}
             <span className="filetree-icon">{icon}</span>
@@ -69,6 +72,8 @@ export default function FileTree({ rootPath, onOpenFile }) {
     const [nodes, setNodes] = useState([]);
     // Phase 2: Add search state
     const [searchQuery, setSearchQuery] = useState("");
+    const [contextMenu, setContextMenu] = useState(null);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     useEffect(() => {
         async function loadRoot() {
@@ -162,13 +167,13 @@ export default function FileTree({ rootPath, onOpenFile }) {
     // Phase 2: Deep search that actually reads directories
     async function deepSearch(query) {
         const results = [];
-        
+
         async function searchDir(dirPath, level = 0) {
             try {
                 const entries = await readDirectory(dirPath);
                 for (const entry of entries) {
                     const fullPath = dirPath === '.' ? entry.name : `${dirPath}/${entry.name}`;
-                    
+
                     if (entry.name.toLowerCase().includes(query.toLowerCase())) {
                         results.push({
                             name: entry.name,
@@ -179,7 +184,7 @@ export default function FileTree({ rootPath, onOpenFile }) {
                             level: level
                         });
                     }
-                    
+
                     // Recursively search subdirectories
                     if (entry.isDirectory) {
                         await searchDir(fullPath, level + 1);
@@ -189,9 +194,70 @@ export default function FileTree({ rootPath, onOpenFile }) {
                 console.error(`Error searching ${dirPath}:`, err);
             }
         }
-        
+
         await searchDir('.');
         return results;
+    }
+
+    function handleContextMenu(e, node) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const items = [
+            {
+                label: 'Open',
+                icon: '📂',
+                onClick: () => {
+                    if (node.isDirectory) {
+                        toggleFolder(node);
+                    } else {
+                        onOpenFile(node);
+                    }
+                }
+            },
+            { separator: true },
+            {
+                label: 'Copy Path',
+                icon: '📋',
+                onClick: () => {
+                    navigator.clipboard.writeText(node.path);
+                }
+            },
+            { separator: true },
+            {
+                label: 'Delete',
+                icon: '🗑️',
+                danger: true,
+                onClick: () => {
+                    setDeleteConfirm({
+                        title: `Delete ${node.isDirectory ? 'Folder' : 'File'}`,
+                        message: `Are you sure you want to delete "${node.name}"?${node.isDirectory ? ' This will delete all contents.' : ''}`,
+                        onConfirm: async () => {
+                            try {
+                                await deleteFile(node.path);
+                                // Reload the tree
+                                const entries = await readDirectory(".");
+                                const mapped = entries.map((e) => ({
+                                    name: e.name,
+                                    path: e.name,
+                                    isDirectory: e.isDirectory,
+                                    expanded: false,
+                                    children: [],
+                                    level: 0,
+                                }));
+                                setNodes(mapped);
+                                setDeleteConfirm(null);
+                            } catch (err) {
+                                console.error("Delete error:", err);
+                                alert(`Failed to delete: ${err.message}`);
+                            }
+                        }
+                    });
+                }
+            }
+        ];
+
+        setContextMenu({ x: e.clientX, y: e.clientY, items });
     }
 
     // Phase 2: Filter nodes based on search
@@ -205,7 +271,7 @@ export default function FileTree({ rootPath, onOpenFile }) {
                 setSearchResults([]);
                 return;
             }
-            
+
             setIsSearching(true);
             try {
                 const results = await deepSearch(searchQuery);
@@ -217,7 +283,7 @@ export default function FileTree({ rootPath, onOpenFile }) {
                 setIsSearching(false);
             }
         }
-        
+
         const timer = setTimeout(performSearch, 300); // Debounce
         return () => clearTimeout(timer);
     }, [searchQuery]);
@@ -271,9 +337,26 @@ export default function FileTree({ rootPath, onOpenFile }) {
                         level={node.level}
                         onOpenFile={onOpenFile}
                         onToggleFolder={toggleFolder}
+                        onContextMenu={handleContextMenu}
                     />
                 ))}
             </div>
+            {contextMenu && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    items={contextMenu.items}
+                    onClose={() => setContextMenu(null)}
+                />
+            )}
+            {deleteConfirm && (
+                <ConfirmModal
+                    title={deleteConfirm.title}
+                    message={deleteConfirm.message}
+                    onConfirm={deleteConfirm.onConfirm}
+                    onCancel={() => setDeleteConfirm(null)}
+                />
+            )}
         </>
     );
 }
