@@ -23,8 +23,11 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
-    // NEW STATE: For Project Knowledge
+    // NEW STATE: For Project Knowledge (Local)
     const [projectKnowledge, setProjectKnowledge] = useState({});
+    
+    // 🌟 NEW STATE: For Global Knowledge (Supabase/Cloud)
+    const [globalKnowledge, setGlobalKnowledge] = useState({});
 
     // NEW EFFECT: Handle initial prompt injection from the parent
     useEffect(() => {
@@ -41,7 +44,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
 
     // -----------------------------------------------------------
-    // PHASE 4.2: PROJECT MEMORY LOAD
+    // PHASE 4.2: PROJECT MEMORY LOAD (Local .aesop)
     // -----------------------------------------------------------
 
     // Load project knowledge on initial mount and whenever rootPath changes
@@ -52,6 +55,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                 return;
             }
             try {
+                // Assuming window.aesop.memory.load() is the local project memory
                 const result = await window.aesop.memory.load();
                 if (result.ok && result.knowledge) {
                     setProjectKnowledge(result.knowledge);
@@ -66,6 +70,30 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
         loadKnowledge();
     }, [rootPath]);
+    
+    // -----------------------------------------------------------
+    // 🌟 NEW EFFECT: GLOBAL MEMORY LOAD (Cloud Supabase)
+    // -----------------------------------------------------------
+    
+    // Load global knowledge once on mount
+    useEffect(() => {
+        async function loadGlobalKnowledge() {
+            try {
+                // Assuming window.aesop.globalMemory.load() calls Supabase
+                const result = await window.aesop.globalMemory.load();
+                if (result.ok && result.knowledge) {
+                    setGlobalKnowledge(result.knowledge);
+                } else {
+                    setGlobalKnowledge({});
+                }
+            } catch (err) {
+                console.error("Failed to load global developer insights:", err);
+                setGlobalKnowledge({});
+            }
+        }
+        
+        loadGlobalKnowledge();
+    }, []); // Empty dependency array means this runs only once on component mount
 
 
     // -----------------------------------------------------------
@@ -174,7 +202,9 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         setInput("");
         
         try {
-            await window.aesop.memory.save(updatedKnowledge);
+            // Check if the user wants to save to GLOBAL memory (not yet implemented as a tool, but we can intercept)
+            // For now, assume this function only saves to local project knowledge (projectKnowledge)
+            await window.aesop.memory.save(updatedKnowledge); 
             setProjectKnowledge(updatedKnowledge);
 
             const confirmationMessage = {
@@ -284,7 +314,13 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         // NEW: Serialize project knowledge for AI context
         let knowledgeContext = "";
         if (projectKnowledge && Object.keys(projectKnowledge).length > 0) {
-            knowledgeContext = "PROJECT KNOWLEDGE:\n" + JSON.stringify(projectKnowledge, null, 2) + "\n\n";
+            knowledgeContext = JSON.stringify(projectKnowledge, null, 2);
+        }
+        
+        // 🌟 NEW: Serialize global knowledge for AI context
+        let globalKnowledgeContext = "";
+        if (globalKnowledge && Object.keys(globalKnowledge).length > 0) {
+            globalKnowledgeContext = JSON.stringify(globalKnowledge, null, 2);
         }
 
 
@@ -294,8 +330,9 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             fileContext,
             // Pass the entire history array for continuous context (Phase 4.1)
             history: history,
-            // NEW: Pass knowledge context to be prepended to prompt
-            knowledgeContext: knowledgeContext
+            // NEW: Pass both knowledge contexts
+            knowledgeContext: knowledgeContext,
+            globalKnowledgeContext: globalKnowledgeContext // 🌟 NEW PROP
         });
         const aiMessage = {
             role: "assistant",
@@ -373,7 +410,8 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                         systemPrompt: SYSTEM_PROMPT,
                         fileContext,
                         history: [...history, aiMessage, resultMsg], // Pass updated history to recursive call
-                        knowledgeContext: knowledgeContext // NEW: Pass context to recursive call
+                        knowledgeContext: knowledgeContext, // Pass context to recursive call
+                        globalKnowledgeContext: globalKnowledgeContext // 🌟 NEW PROP to recursive call
                     });
                     const followUpMsg = {
                         role: "assistant",

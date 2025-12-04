@@ -1,5 +1,5 @@
 // ipcHandlers.js
-const { ipcMain, dialog, BrowserWindow } = require("electron");
+const { ipcMain, dialog, BrowserWindow } = require("electron"); 
 const path = require("path");
 const fs = require("fs").promises;
 const fsSync = require("fs");
@@ -8,6 +8,9 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
 const { nanoid } = require('nanoid/non-secure');
+
+// 🌟 CRITICAL FIX: The required table name for global insights
+const GLOBAL_MEMORY_TABLE = "AesopIDE_global_memory";
 
 // Track current project root (folder opened in the IDE)
 let currentRoot = process.cwd();
@@ -269,7 +272,7 @@ function registerIpcHandlers() {
     });
 
     // ---------------------------------------------------------------------------
-    // PHASE 4.2: PROJECT MEMORY
+    // PHASE 4.2: PROJECT MEMORY (Project-Specific)
     // ---------------------------------------------------------------------------
     const PROJECT_MEMORY_FILE = "project_knowledge.json";
 
@@ -306,6 +309,59 @@ function registerIpcHandlers() {
             return { ok: false, error: err.message || String(err) };
         }
     });
+    
+    // ---------------------------------------------------------------------------
+    // GLOBAL MEMORY (Cross-Project via Supabase)
+    // ---------------------------------------------------------------------------
+    // NOTE: This now uses the required table name: AesopIDE_global_memory
+
+    ipcMain.handle("globalMemory:save", async (event, knowledge) => {
+        try {
+            const supabase = getSupabaseClient();
+            
+            // Use a fixed key (e.g., 'developer_insights') to store global memory for the user
+            const fixedKey = 'global_developer_insights'; 
+            
+            // Upsert: Inserts if key is new, updates if key exists
+            const { error } = await supabase
+                .from(GLOBAL_MEMORY_TABLE) 
+                .upsert({ key: fixedKey, data: knowledge }, { onConflict: 'key' }); 
+
+            if (error) throw error;
+
+            return { ok: true, message: `Global developer insights saved to ${GLOBAL_MEMORY_TABLE}.` };
+        } catch (err) {
+            console.error("[AesopIDE globalMemory:save error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
+
+    ipcMain.handle("globalMemory:load", async () => {
+        try {
+            const supabase = getSupabaseClient();
+            const fixedKey = 'global_developer_insights'; 
+
+            const { data, error } = await supabase
+                .from(GLOBAL_MEMORY_TABLE)
+                .select('data')
+                .eq('key', fixedKey)
+                .single(); 
+
+            // If no row is found (error code PGRST116), return empty knowledge.
+            if (error && error.code === 'PGRST116') { 
+                return { ok: true, knowledge: {} }; 
+            }
+            if (error) {
+                throw error;
+            }
+
+            // Return the 'data' column content (which is the knowledge JSON)
+            return { ok: true, knowledge: data ? data.data : {} };
+        } catch (err) {
+            console.error("[AesopIDE globalMemory:load error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
     // ---------------------------------------------------------------------------
     // PROMPT (Gemini) - used by the AI prompt window
     // ---------------------------------------------------------------------------
@@ -319,7 +375,8 @@ function registerIpcHandlers() {
             let fileContext = null;
             let cursor = null;
             let history = [];
-            let knowledgeContext = ""; // NEW: knowledgeContext
+            let knowledgeContext = ""; // Project knowledge
+            let globalKnowledgeContext = ""; // Global knowledge
 
             if (typeof payloadOrText === "string" || payloadOrText instanceof String) {
                 userPrompt = payloadOrText;
@@ -328,7 +385,8 @@ function registerIpcHandlers() {
                     fileContext = maybeOptions.fileContext || null;
                     cursor = maybeOptions.cursor || null;
                     history = maybeOptions.history || [];
-                    knowledgeContext = maybeOptions.knowledgeContext || ""; // NEW
+                    knowledgeContext = maybeOptions.knowledgeContext || "";
+                    globalKnowledgeContext = maybeOptions.globalKnowledgeContext || "";
                 }
             } else if (payloadOrText && typeof payloadOrText === "object") {
                 userPrompt = payloadOrText.prompt || "";
@@ -336,15 +394,20 @@ function registerIpcHandlers() {
                 fileContext = payloadOrText.fileContext || null;
                 cursor = payloadOrText.cursor || null;
                 history = payloadOrText.history || [];
-                knowledgeContext = payloadOrText.knowledgeContext || ""; // NEW
+                knowledgeContext = payloadOrText.knowledgeContext || "";
+                globalKnowledgeContext = payloadOrText.globalKnowledgeContext || "";
             }
 
             const parts = [];
             if (systemPrompt) {
                 parts.push({ text: systemPrompt + "\n\n" });
             }
-            if (knowledgeContext) { // NEW: Add project knowledge context before file context
-                parts.push({ text: knowledgeContext });
+            // Prioritize Global Insights first, then Project Knowledge
+            if (globalKnowledgeContext) {
+                parts.push({ text: `## GLOBAL INSIGHTS (Cross-Project Developer Knowledge)\n${globalKnowledgeContext}\n\n` });
+            }
+            if (knowledgeContext) { 
+                parts.push({ text: `## PROJECT KNOWLEDGE (Current Project Architecture)\n${knowledgeContext}\n\n` });
             }
             if (fileContext) {
                 parts.push({ text: "Project context:\n" + fileContext + "\n\n" });
@@ -478,7 +541,7 @@ function registerIpcHandlers() {
             return { ok: true, output: JSON.stringify(result) };
         } catch (err) {
             console.error("[AesopIDE git:push error]", err);
-            return { ok: false, output: err.message || String(err) };
+            return { ok: false, output: JSON.stringify(err) };
         }
     });
 

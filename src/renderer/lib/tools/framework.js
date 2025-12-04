@@ -79,8 +79,10 @@ export async function executeTool(toolName, params) {
             return { id: params.id, output: outputResult.output };
             
         // -----------------------------------------------------------
-        // PHASE 4.2: PROJECT MEMORY TOOLS
+        // PHASE 4.2: PROJECT MEMORY TOOLS (Local & Global)
         // -----------------------------------------------------------
+        
+        // --- Project-Specific Memory (Local) ---
         case 'saveKnowledge':
             if (!params.knowledge || typeof params.knowledge !== 'object') {
                  throw new Error("saveKnowledge requires a 'knowledge' object.");
@@ -92,6 +94,21 @@ export async function executeTool(toolName, params) {
             const memoryResult = await window.aesop.memory.load();
             if (!memoryResult.ok) throw new Error(memoryResult.error || "Failed to load project memory.");
             return { knowledge: memoryResult.knowledge };
+
+        // 🌟 NEW: Global Cross-Project Memory (Supabase)
+        case 'saveGlobalInsight':
+            if (!params.insight || typeof params.insight !== 'object') {
+                 throw new Error("saveGlobalInsight requires an 'insight' object.");
+            }
+            const saveGlobalResult = await window.aesop.globalMemory.save(params.insight);
+            if (!saveGlobalResult.ok) throw new Error(saveGlobalResult.error || "Failed to save global insight.");
+            return { success: true };
+            
+        case 'loadGlobalInsights':
+            const loadGlobalResult = await window.aesop.globalMemory.load();
+            if (!loadGlobalResult.ok) throw new Error(loadGlobalResult.error || "Failed to load global insights.");
+            return { insights: loadGlobalResult.knowledge };
+
 
         // -----------------------------------------------------------
         // PHASE 5.1: DIFF/PATCH TOOLS
