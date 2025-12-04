@@ -230,10 +230,10 @@ export default function App() {
             prev.map((t) =>
                 t.path === activePath
                     ? {
-                          ...t,
-                          content: newContent,
-                          isDirty: newContent !== t.originalContent,
-                      }
+                        ...t,
+                        content: newContent,
+                        isDirty: newContent !== t.originalContent,
+                    }
                     : t
             )
         );
@@ -346,21 +346,27 @@ export default function App() {
         setPlanModalContent(null); // Close modal
 
         try {
-            // Find the execution chain hidden in the plan (AI is expected to output a JSON blob in markdown)
-            // 🌟 FIX: Use a more lenient regex to find ANY fenced code block, not just one tagged 'json'.
-            const jsonMatch = rawPlanContent.match(/```\s*([\s\S]*?)```/); 
-            
-            if (!jsonMatch || !jsonMatch[1]) {
-                // 🌟 FIX: Updated error message to match new parsing logic
-                throw new Error("Plan content must contain a fenced code block with the execution chain.");
-            }
-
             let actionChain;
+
+            // Try parsing as raw JSON first (in case content is already extracted)
             try {
-                // Attempt to parse the content found inside the code block
-                actionChain = JSON.parse(jsonMatch[1]);
-            } catch (e) {
-                throw new Error(`Failed to parse the execution chain JSON. Content inside code block is invalid JSON: ${e.message}`);
+                actionChain = JSON.parse(rawPlanContent);
+                console.log("[handleExecutePlan] Parsed as raw JSON");
+            } catch (rawParseError) {
+                // If raw parsing fails, try extracting from markdown code fence
+                console.log("[handleExecutePlan] Raw JSON parse failed, trying markdown extraction");
+                const jsonMatch = rawPlanContent.match(/```\s*([\s\S]*?)```/);
+
+                if (!jsonMatch || !jsonMatch[1]) {
+                    throw new Error("Plan content must contain valid JSON or a fenced code block with the execution chain.");
+                }
+
+                try {
+                    actionChain = JSON.parse(jsonMatch[1]);
+                    console.log("[handleExecutePlan] Parsed from markdown fence");
+                } catch (fenceParseError) {
+                    throw new Error(`Failed to parse execution chain. Raw error: ${rawParseError.message}. Fenced error: ${fenceParseError.message}`);
+                }
             }
 
             if (!Array.isArray(actionChain)) {
@@ -385,7 +391,7 @@ export default function App() {
         setPromptOpen(true);
         // Hint the user/AI to start a planning task if the prompt is empty
         setStatusMessage("Planning Mode: Ask the AI to create an 'implementation_plan.md'.");
-        
+
         // ADDED: Set a starting prompt for a better user experience
         setInitialPrompt("I need a plan to implement a new feature. Please create an 'implementation_plan.md' that details the steps.");
     }
@@ -480,7 +486,7 @@ export default function App() {
                 console.error("Error creating implementation plan file:", err);
                 setStatusMessage(`ERROR: Failed to save plan file to disk. Check console for details. (${err.message})`);
             }
-            
+
             return; // EXIT: Do not proceed to open or apply as a normal file
         }
         // -----------------------------------------------------------
