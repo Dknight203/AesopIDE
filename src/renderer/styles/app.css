@@ -251,6 +251,17 @@ textarea::placeholder {
     color: var(--text-muted);
 }
 
+/* === Cursor Visibility (Phase 1) === */
+input,
+textarea {
+    caret-color: var(--accent-primary);
+}
+
+input:focus,
+textarea:focus {
+    caret-color: #ffffff;
+}
+
 /* === Scrollbar Styling === */
 ::-webkit-scrollbar {
     width: 12px;

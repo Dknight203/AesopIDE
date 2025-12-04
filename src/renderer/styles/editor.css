@@ -94,3 +94,10 @@
 .editor-textarea:focus {
     outline: none;
 }
+/* Phase 1: Cursor visibility */
+.editor-textarea {
+    caret-color: #ffffff !important;
+}
+.editor-textarea:focus {
+    caret-color: #ffffff !important;
+}

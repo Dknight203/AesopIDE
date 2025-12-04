@@ -43,6 +43,9 @@ function NodeRow({ node, level, onOpenFile, onToggleFolder }) {
         ? (node.expanded ? "📂" : "📁")
         : getFileIcon(node.name, false);
 
+    // Phase 2: Add chevron for folders
+    const chevron = isDir ? (node.expanded ? "▼" : "▶") : null;
+
     return (
         <div
             className={`filetree-row ${isDir ? 'filetree-row-dir' : ''}`}
@@ -55,6 +58,7 @@ function NodeRow({ node, level, onOpenFile, onToggleFolder }) {
                 }
             }}
         >
+            {chevron && <span className="filetree-chevron">{chevron}</span>}
             <span className="filetree-icon">{icon}</span>
             <span className="filetree-name">{node.name}</span>
         </div>
@@ -63,6 +67,8 @@ function NodeRow({ node, level, onOpenFile, onToggleFolder }) {
 
 export default function FileTree({ rootPath, onOpenFile }) {
     const [nodes, setNodes] = useState([]);
+    // Phase 2: Add search state
+    const [searchQuery, setSearchQuery] = useState("");
 
     useEffect(() => {
         async function loadRoot() {
@@ -153,6 +159,70 @@ export default function FileTree({ rootPath, onOpenFile }) {
     }
 
     const flat = flatten(nodes);
+    // Phase 2: Deep search that actually reads directories
+    async function deepSearch(query) {
+        const results = [];
+        
+        async function searchDir(dirPath, level = 0) {
+            try {
+                const entries = await readDirectory(dirPath);
+                for (const entry of entries) {
+                    const fullPath = dirPath === '.' ? entry.name : `${dirPath}/${entry.name}`;
+                    
+                    if (entry.name.toLowerCase().includes(query.toLowerCase())) {
+                        results.push({
+                            name: entry.name,
+                            path: fullPath,
+                            isDirectory: entry.isDirectory,
+                            expanded: false,
+                            children: [],
+                            level: level
+                        });
+                    }
+                    
+                    // Recursively search subdirectories
+                    if (entry.isDirectory) {
+                        await searchDir(fullPath, level + 1);
+                    }
+                }
+            } catch (err) {
+                console.error(`Error searching ${dirPath}:`, err);
+            }
+        }
+        
+        await searchDir('.');
+        return results;
+    }
+
+    // Phase 2: Filter nodes based on search
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+
+    // Phase 2: Trigger search when query changes
+    useEffect(() => {
+        async function performSearch() {
+            if (!searchQuery) {
+                setSearchResults([]);
+                return;
+            }
+            
+            setIsSearching(true);
+            try {
+                const results = await deepSearch(searchQuery);
+                setSearchResults(results);
+            } catch (err) {
+                console.error('Search error:', err);
+                setSearchResults([]);
+            } finally {
+                setIsSearching(false);
+            }
+        }
+        
+        const timer = setTimeout(performSearch, 300); // Debounce
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const filteredFlat = searchQuery ? searchResults : flat;
 
     return (
         <>
@@ -162,17 +232,39 @@ export default function FileTree({ rootPath, onOpenFile }) {
                     {/* Future: Add refresh, collapse all buttons */}
                 </div>
             </div>
+            {/* Phase 2: Search bar */}
+            <div className="explorer-search-container">
+                <span className="search-icon">🔍</span>
+                <input
+                    type="text"
+                    className="explorer-search-input"
+                    placeholder="Search files..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                    <button
+                        className="search-clear-btn"
+                        onClick={() => setSearchQuery("")}
+                        title="Clear search"
+                    >
+                        ×
+                    </button>
+                )}
+            </div>
             <div className="filetree-scroll scrollable">
-                {flat.length === 0 && (
+                {filteredFlat.length === 0 && (
                     <div className="empty-state">
                         <div className="empty-state-icon">📁</div>
-                        <div className="empty-state-title">No Files</div>
+                        <div className="empty-state-title">
+                            {searchQuery ? "No matches" : "No Files"}
+                        </div>
                         <div className="empty-state-description">
-                            Open a folder to get started
+                            {searchQuery ? `No files match "${searchQuery}"` : "Open a folder to get started"}
                         </div>
                     </div>
                 )}
-                {flat.map((node) => (
+                {filteredFlat.map((node) => (
                     <NodeRow
                         key={node.path}
                         node={node}

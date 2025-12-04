@@ -161,16 +161,10 @@
 }
 
 .message-user .message-content {
-    background: var(--accent-primary);
-    color: var(--bg-dark);
+    background: #2563EB;
+    color: #ffffff;
     border-bottom-right-radius: var(--radius-sm);
-}
-
-.message-assistant .message-content {
-    background: var(--panel);
-    color: var(--text-light);
-    border: 1px solid var(--border);
-    border-bottom-left-radius: var(--radius-sm);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
 .message-tool .message-content {
@@ -394,4 +388,16 @@
 .prompt-apply-btn:hover {
     background: var(--accent-secondary-hover);
     transform: translateY(-1px);
+}
+/* File links in user messages (Phase 1: Better contrast) */
+.message-user .file-link {
+    color: #22D3EE;
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: rgba(34, 211, 238, 0.4);
+}
+
+.message-user .file-link:hover {
+    color: #06B6D4;
+    background: rgba(255, 255, 255, 0.15);
 }
