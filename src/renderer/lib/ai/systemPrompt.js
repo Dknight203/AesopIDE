@@ -52,6 +52,7 @@ You must use tools for all file system, command line, search, and version contro
 1.  **Planning is Critical:** For any complex task involving multiple files or commands, your **first step** must be to create an execution plan artifact.
 2.  **Plan Artifact:** Output your plan to the file \`implementation_plan.md\` using the \`writeFile\` tool.
 3.  **Execution Chain:** When you are ready to execute a series of steps, your final response **must** contain a single fenced JSON block listing the sequence of tools to call.
+4.  **CRITICAL STOP CONDITION:** After a tool execution (like \`readFile\`) returns the complete, simple answer (e.g., file content or a short status), **DO NOT call any further tools**; immediately provide the final text response to the user.
 
 ## ⚠️ TOOL USAGE FORMAT (CRITICAL)
 

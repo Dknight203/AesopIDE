@@ -1,4 +1,5 @@
 // src/renderer/lib/tasks/manager.js
+
 import { executeTool } from "../tools/framework";
 
 // ---------------------------------------------------
@@ -21,8 +22,15 @@ async function executeStep(toolName, params) {
         // Phase 3.3: Implement Rollback on Errors (Placeholder)
         console.error(`Execution step failed for tool ${toolName}. Triggering rollback...`, error);
         
-        // Re-throw a detailed error to halt the chain
-        throw { success: false, tool: toolName, error: error.message || String(error) };
+        // FIX: Throw a native Error instance with a structured message 
+        // to ensure it propagates correctly through the async chain and IPC layer.
+        const errorDetails = { 
+            success: false, 
+            tool: toolName, 
+            message: error.message || String(error) 
+        };
+        // Throw a new Error object containing the structured details
+        throw new Error(JSON.stringify(errorDetails));
     }
 }
 
@@ -42,6 +50,7 @@ export async function executeChain(actionChain) {
             chainResults.push(result);
             
         } catch (stepError) {
+            // Re-throw the structured Error from executeStep
             throw stepError;
         }
     }

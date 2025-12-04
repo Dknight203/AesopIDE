@@ -343,6 +343,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
 
                         if (path && onApplyCode) {
+                            // This sends an IPC command to open the file after it's been written
                             setTimeout(() => onApplyCode(`AesopIDE open file: ${path}`), 100);
                         }
                     }
@@ -396,6 +397,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
         // Auto-apply if applicable
         if (hasActionableContent(reply) && onApplyCode) {
+            // This is the call that initiates the Plan Review Modal when the user clicks 'Apply to file'
             setTimeout(() => onApplyCode(reply), 100);
         }
     }
@@ -426,7 +428,14 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
 
         // Check for fenced code blocks
-        if (content.match(/```[\\s\S]*?```/)) {
+        if (content.match(/```[\s\S]*?```/)) {
+            return true;
+        }
+        
+        // FIX: Explicitly check for an executable JSON array, which is the true actionable content for plan execution.
+        // This regex detects the start of a tool call array: [ { "tool": "..."
+        // The /s flag allows '.' to match newlines.
+        if (content.match(/\[\s*\{[^}]*?"tool"\s*:\s*".*?"/s)) {
             return true;
         }
 
@@ -435,7 +444,6 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     }
 
 
-    // Render message content with clickable file links
     function renderMessageContent(content) {
         if (!content || typeof content !== "string") return content;
 

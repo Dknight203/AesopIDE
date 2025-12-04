@@ -347,22 +347,12 @@ export default function App() {
 
         try {
             // Find the execution chain hidden in the plan (AI is expected to output a JSON blob in markdown)
-            // 🌟 FIX: Use a more lenient regex to find ANY fenced code block, not just one tagged 'json'.
-            const jsonMatch = rawPlanContent.match(/```\s*([\s\S]*?)```/); 
-            
+            const jsonMatch = rawPlanContent.match(/```json\s*\n([\s\S]*?)```/);
             if (!jsonMatch || !jsonMatch[1]) {
-                // 🌟 FIX: Updated error message to match new parsing logic
-                throw new Error("Plan content must contain a fenced code block with the execution chain.");
+                throw new Error("Plan content must contain a fenced JSON block with the execution chain.");
             }
 
-            let actionChain;
-            try {
-                // Attempt to parse the content found inside the code block
-                actionChain = JSON.parse(jsonMatch[1]);
-            } catch (e) {
-                throw new Error(`Failed to parse the execution chain JSON. Content inside code block is invalid JSON: ${e.message}`);
-            }
-
+            const actionChain = JSON.parse(jsonMatch[1]);
             if (!Array.isArray(actionChain)) {
                 throw new Error("Execution chain must be a JSON array of actions.");
             }
