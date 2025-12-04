@@ -13,6 +13,7 @@ import InputModal from "./components/InputModal";
 import StatusBar from "./components/StatusBar";
 // NEW COMPONENT IMPORT
 import PlanReview from "./components/PlanReview";
+import IngestModal from "./components/IngestModal"; // Phase 6.3
 
 import { getRoot, openFolderDialog } from "./lib/project";
 import { readFile, writeFile, newFile, newFolder } from "./lib/fileSystem";
@@ -34,6 +35,7 @@ export default function App() {
 
     // Phase 3.2 State: Stores content of the plan waiting for review
     const [planModalContent, setPlanModalContent] = useState(null);
+    const [ingestModalOpen, setIngestModalOpen] = useState(false); // Phase 6.3
 
     // Layout state
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -577,6 +579,8 @@ export default function App() {
                 }
                 // NEW PROP: Pass handler to TopBar
                 onNewPlan={handleNewPlan}
+                // NEW PROP: Pass handler to TopBar (from IngestModal context)
+                onIngest={() => setIngestModalOpen(true)}
                 sidebarCollapsed={sidebarCollapsed}
                 bottomPanelCollapsed={bottomPanelCollapsed}
             />
@@ -663,6 +667,13 @@ export default function App() {
                     onCancel={() => setPlanModalContent(null)}
                     onExecute={handleExecutePlan} // 🌟 CRITICAL FIX: Prop name corrected to 'onExecute'
                     initialPlanContent={planModalContent}
+                />
+            )}
+            
+            {ingestModalOpen && (
+                <IngestModal
+                    onClose={() => setIngestModalOpen(false)}
+                    onIngest={(result) => setStatusMessage(result.message || 'Document ingested')}
                 />
             )}
         </div>

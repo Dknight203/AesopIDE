@@ -1,0 +1,188 @@
+// src/renderer/components/IngestModal.jsx
+import React, { useState } from 'react';
+import '../styles/ingestmodal.css';
+
+export default function IngestModal({ onClose, onIngest }) {
+    const [inputType, setInputType] = useState('url'); // 'url' or 'file'
+    const [urlInput, setUrlInput] = useState('');
+    const [fileContent, setFileContent] = useState('');
+    const [fileName, setFileName] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [statusMessage, setStatusMessage] = useState('');
+
+    async function handleUrlFetch() {
+        if (!urlInput.trim()) {
+            setStatusMessage('Please enter a URL');
+            return;
+        }
+
+        setIsProcessing(true);
+        setStatusMessage('Fetching content...');
+
+        try {
+            // Fetch the URL content
+            const response = await fetch(urlInput);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            let content;
+
+            if (contentType?.includes('application/json')) {
+                const json = await response.json();
+                content = JSON.stringify(json, null, 2);
+            } else {
+                content = await response.text();
+            }
+
+            // Call the ingestion handler
+            const result = await window.aesop.ingestion.document(content, urlInput);
+
+            if (result.ok) {
+                setStatusMessage(result.message || 'Document ingested successfully!');
+                setTimeout(() => {
+                    onIngest && onIngest(result);
+                    onClose();
+                }, 1500);
+            } else {
+                setStatusMessage(`Error: ${result.error}`);
+            }
+        } catch (err) {
+            console.error('URL fetch error:', err);
+            setStatusMessage(`Failed to fetch URL: ${err.message}`);
+        } finally {
+            setIsProcessing(false);
+        }
+    }
+
+    function handleFileChange(e) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setFileName(file.name);
+        setStatusMessage('Reading file...');
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            setFileContent(event.target.result);
+            setStatusMessage(`File loaded: ${file.name}`);
+        };
+        reader.onerror = () => {
+            setStatusMessage('Error reading file');
+        };
+        reader.readAsText(file);
+    }
+
+    async function handleFileIngest() {
+        if (!fileContent) {
+            setStatusMessage('Please select a file first');
+            return;
+        }
+
+        setIsProcessing(true);
+        setStatusMessage('Ingesting document...');
+
+        try {
+            const result = await window.aesop.ingestion.document(fileContent, fileName);
+
+            if (result.ok) {
+                setStatusMessage(result.message || 'Document ingested successfully!');
+                setTimeout(() => {
+                    onIngest && onIngest(result);
+                    onClose();
+                }, 1500);
+            } else {
+                setStatusMessage(`Error: ${result.error}`);
+            }
+        } catch (err) {
+            console.error('File ingestion error:', err);
+            setStatusMessage(`Failed to ingest: ${err.message}`);
+        } finally {
+            setIsProcessing(false);
+        }
+    }
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="ingest-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="ingest-modal-header">
+                    <h2>📚 Ingest Document</h2>
+                    <button className="close-btn" onClick={onClose} title="Close">✕</button>
+                </div>
+
+                <div className="ingest-modal-body">
+                    {/* Tab Selection */}
+                    <div className="input-type-tabs">
+                        <button
+                            className={`tab ${inputType === 'url' ? 'active' : ''}`}
+                            onClick={() => setInputType('url')}
+                        >
+                            🔗 URL
+                        </button>
+                        <button
+                            className={`tab ${inputType === 'file' ? 'active' : ''}`}
+                            onClick={() => setInputType('file')}
+                        >
+                            📄 File
+                        </button>
+                    </div>
+
+                    {/* URL Input */}
+                    {inputType === 'url' && (
+                        <div className="input-section">
+                            <label>Enter URL to documentation or article:</label>
+                            <input
+                                type="text"
+                                placeholder="https://docs.example.com/api-guide"
+                                value={urlInput}
+                                onChange={(e) => setUrlInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleUrlFetch()}
+                                disabled={isProcessing}
+                            />
+                            <button
+                                className="ingest-btn"
+                                onClick={handleUrlFetch}
+                                disabled={isProcessing || !urlInput.trim()}
+                            >
+                                {isProcessing ? '⏳ Fetching...' : 'Fetch & Ingest'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* File Upload */}
+                    {inputType === 'file' && (
+                        <div className="input-section">
+                            <label>Upload a file (.txt, .md, .json):</label>
+                            <input
+                                type="file"
+                                accept=".txt,.md,.json,.markdown"
+                                onChange={handleFileChange}
+                                disabled={isProcessing}
+                            />
+                            {fileName && (
+                                <div className="file-info">
+                                    Selected: <strong>{fileName}</strong>
+                                </div>
+                            )}
+                            <button
+                                className="ingest-btn"
+                                onClick={handleFileIngest}
+                                disabled={isProcessing || !fileContent}
+                            >
+                                {isProcessing ? '⏳ Ingesting...' : 'Ingest File'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Status Message */}
+                    {statusMessage && (
+                        <div className={`status-message ${statusMessage.startsWith('Error') ? 'error' : ''}`}>
+                            {statusMessage}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}

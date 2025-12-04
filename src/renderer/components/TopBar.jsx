@@ -11,6 +11,7 @@ export default function TopBar({
     onToggleSidebar,
     onToggleBottomPanel,
     onNewPlan, // NEW PROP
+    onIngest, // Phase 6.3
     sidebarCollapsed,
     bottomPanelCollapsed,
 }) {
@@ -44,6 +45,13 @@ export default function TopBar({
                         title="Start a new AI Planning Session"
                     >
                         📝 Plan
+                    </button>
+                    <button 
+                        className="topbar-btn-accent" 
+                        onClick={onIngest}
+                        title="Ingest documentation from URL or file"
+                    >
+                        📚 Ingest
                     </button>
                 </div>
             </div>

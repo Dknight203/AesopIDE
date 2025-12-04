@@ -2,26 +2,16 @@
   {
     "role": "assistant",
     "content": "Hello. I am your AI assistant inside AesopIDE. Ask me about your code or project and I will help.",
-    "timestamp": "2025-12-04T17:48:18.581Z"
+    "timestamp": "2025-12-04T18:26:37.565Z"
   },
   {
     "role": "user",
-    "content": "Search the developer library for best practices on error handling",
-    "timestamp": "2025-12-04T17:48:51.405Z"
+    "content": "do you know what time it is",
+    "timestamp": "2025-12-04T18:29:22.522Z"
   },
   {
     "role": "assistant",
-    "content": "I can help with that! I will query the Developer Library for best practices on error handling.\n\n```json\n[\n  {\n    \"tool\": \"queryDeveloperLibrary\",\n    \"params\": {\n      \"question\": \"best practices on error handling\"\n    }\n  }\n]\n```",
-    "timestamp": "2025-12-04T17:48:52.516Z"
-  },
-  {
-    "role": "tool",
-    "content": "Executing tool: queryDeveloperLibrary...",
-    "timestamp": "2025-12-04T17:48:52.517Z"
-  },
-  {
-    "role": "tool_error",
-    "content": "Tool 'queryDeveloperLibrary' failed: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent: [400 Bad Request] Invalid value at 'content' (type.googleapis.com/google.ai.generativelanguage.v1beta.Content), \"best practices on error handling\" [{\"@type\":\"type.googleapis.com/google.rpc.BadRequest\",\"fieldViolations\":[{\"field\":\"content\",\"description\":\"Invalid value at 'content' (type.googleapis.com/google.ai.generativelanguage.v1beta.Content), \\\"best practices on error handling\\\"\"}]}]",
-    "timestamp": "2025-12-04T17:48:52.596Z"
+    "content": "I am an AI assistant and do not have access to real-time information, so I can't tell you the current time.",
+    "timestamp": "2025-12-04T18:29:23.592Z"
   }
 ]
