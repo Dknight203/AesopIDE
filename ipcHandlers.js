@@ -9,7 +9,7 @@ const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
 const { nanoid } = require('nanoid/non-secure');
 
-// 🌟 CRITICAL FIX: Use standard PostgreSQL lowercase names for stability
+// 🌟 PHASE 4 & 6 TABLE NAMES
 const GLOBAL_MEMORY_TABLE = "aesopide_global_memory"; 
 const DEVELOPER_LIBRARY_TABLE = "aesopide_developer_library"; // New table name for RAG chunks/embeddings
 
@@ -263,28 +263,6 @@ function registerIpcHandlers() {
         return { ok: true, path: relPath };
     });
 
-    ipcMain.handle("fs:deleteFile", async (event, arg) => {
-        const root = ensureRoot();
-        const relPath = normalizeRelPath(arg, ["filePath", "path"]);
-        if (!relPath || typeof relPath !== "string") {
-            throw new Error("fs:deleteFile requires a relative path string");
-        }
-
-        const fullPath = path.resolve(root, relPath);
-        
-        try {
-            const stats = await fs.stat(fullPath);
-            if (stats.isDirectory()) {
-                await fs.rm(fullPath, { recursive: true, force: true });
-            } else {
-                await fs.unlink(fullPath);
-            }
-            return { ok: true, path: relPath };
-        } catch (err) {
-            throw new Error(`Failed to delete ${relPath}: ${err.message}`);
-        }
-    });
-
     // ---------------------------------------------------------------------------
     // PHASE 4.1: CONVERSATION HISTORY
     // ---------------------------------------------------------------------------
@@ -388,7 +366,7 @@ function registerIpcHandlers() {
             // Use a fixed key (e.g., 'developer_insights') to store global memory for the user
             const fixedKey = 'global_developer_insights'; 
             
-            // 🌟 CRITICAL FIX: Use simple lowercase name, relying on Postgres/PostgREST standard
+            // 🌟 CRITICAL FIX: Use simplified table name
             const { error } = await supabase
                 .from(GLOBAL_MEMORY_TABLE) 
                 .upsert({ key: fixedKey, data: knowledge }, { onConflict: 'key' }); 
@@ -407,7 +385,7 @@ function registerIpcHandlers() {
             const supabase = getSupabaseClient();
             const fixedKey = 'global_developer_insights'; 
 
-            // 🌟 CRITICAL FIX: Use simple lowercase name, relying on Postgres/PostgREST standard
+            // 🌟 CRITICAL FIX: Use simplified table name
             const { data, error } = await supabase
                 .from(GLOBAL_MEMORY_TABLE)
                 .select('data')
@@ -489,6 +467,47 @@ function registerIpcHandlers() {
             return { ok: false, error: err.message || String(err) };
         }
     });
+
+// ---------------------------------------------------------------------------
+// 🌟 PHASE 6.2: DEVELOPER LIBRARY QUERY (RAG RETRIEVAL)
+// ---------------------------------------------------------------------------
+ipcMain.handle("developerLibrary:query", async (event, { question }) => {
+    if (!question || typeof question !== 'string') {
+        return { ok: false, error: "Query requires a 'question' string." };
+    }
+
+    try {
+        // 1. Generate embedding for the user's question
+        const embedder = getEmbeddingModel();
+        const embeddingResponse = await embedder.embedContent({ content: question });
+        const queryVector = embeddingResponse.embedding.values;
+
+        if (!queryVector || queryVector.length !== 768) {
+            throw new Error(`Invalid embedding vector size: ${queryVector?.length}`);
+        }
+
+        // 2. Query Supabase for similar documents using vector similarity
+        const supabase = getSupabaseClient();
+        // Call the custom PostgreSQL RPC function (needs to be created in the DB)
+        const { data, error } = await supabase.rpc('match_developer_library', {
+            query_embedding: queryVector,
+            match_threshold: 0.5,
+            match_count: 5
+        });
+
+        if (error) throw error;
+
+        return {
+            ok: true,
+            results: data || [],
+            message: `Found ${(data || []).length} relevant knowledge chunks.`
+        };
+    } catch (err) {
+        console.error("[developerLibrary:query error]", err);
+        return { ok: false, error: err.message || String(err) };
+    }
+});
+// End of new handler insertion
 
 
     // ---------------------------------------------------------------------------
@@ -830,7 +849,7 @@ function registerIpcHandlers() {
 
         async function searchDir(dir) {
             const entries = await fs.readdir(dir, { withFileTypes: true });
-            for (const entry of entries) {
+                for (const entry of entries) {
                 const fullPath = path.join(dir, entry.name);
                 const relPath = path.relative(root, fullPath).replace(/\\/g, "/");
 

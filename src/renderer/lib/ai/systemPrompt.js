@@ -43,9 +43,9 @@ You must use tools for all file system, command line, search, and version contro
 * **saveGlobalInsight(insight):** Saves **transferable developer insights, best practices, or custom rules** as a JSON object to the cloud (Supabase).
 * **loadGlobalInsights():** Loads the **global developer insights** object from the cloud.
 
-### DOCUMENT INGESTION TOOLS (Phase 6.1 - NEW)
-
+### DOCUMENT INGESTION & RETRIEVAL TOOLS (Phase 6)
 * **ingestDocument(content, source):** **Initiates the RAG pipeline to process a document.** Takes the document \`content\` (a string) and its \`source\` (URL or file name) to chunk, embed, and store in the Developer Library. Use this to expand your knowledge base.
+* **queryDeveloperLibrary(question):** **Performs an intelligent search** against the vast Developer Library for relevant technical information. Use this tool when the user asks a non-project-specific question about best practices, APIs, or technologies.
 
 ### VERSION CONTROL & PATCH TOOLS (Phase 5.1)
 

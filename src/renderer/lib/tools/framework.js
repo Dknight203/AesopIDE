@@ -108,7 +108,7 @@ export async function executeTool(toolName, params) {
             const loadGlobalResult = await window.aesop.globalMemory.load();
             if (!loadGlobalResult.ok) throw new Error(loadGlobalResult.error || "Failed to load global insights.");
             return { insights: loadGlobalResult.knowledge };
-            
+
         // -----------------------------------------------------------
         // 🌟 PHASE 6.1: INGESTION TOOL (Developer Library RAG)
         // -----------------------------------------------------------
@@ -124,6 +124,23 @@ export async function executeTool(toolName, params) {
             }
             
             return { success: true, message: ingestResult.message || `Document ingested from ${params.source || 'AI_Command'}. Ready for vector processing.` };
+
+        // -----------------------------------------------------------
+        // 🌟 PHASE 6.2: QUERY TOOL (Developer Library RAG Retrieval)
+        // -----------------------------------------------------------
+        case 'queryDeveloperLibrary':
+            if (!params.question || typeof params.question !== 'string') {
+                throw new Error("queryDeveloperLibrary requires a 'question' string.");
+            }
+            const queryLibResult = await window.aesop.ingestion.query(params.question);
+            if (!queryLibResult.ok) {
+                throw new Error(queryLibResult.error || "Developer library query failed.");
+            }
+            return {
+                results: queryLibResult.results,
+                count: queryLibResult.results.length,
+                message: queryLibResult.message
+            };
 
         // -----------------------------------------------------------
         // PHASE 5.1: DIFF/PATCH TOOLS
@@ -184,7 +201,7 @@ export async function executeTool(toolName, params) {
                 exitCode: testCmdResult.exitCode,
                 // Return full output (which might be JSON or plain text depending on flags)
                 fullOutput: linterCmdResult.output,
-                summary: `Linter completed with exit code ${linterCmdResult.exitCode}. Check output for details.`
+                summary: `Linter completed with exit code ${testCmdResult.exitCode}. Check output for details.`
             };
 
         default:
