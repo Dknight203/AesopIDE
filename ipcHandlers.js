@@ -9,8 +9,9 @@ const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
 const { nanoid } = require('nanoid/non-secure');
 
-// 🌟 CRITICAL FIX: The required table name for global insights
-const GLOBAL_MEMORY_TABLE = "AesopIDE_global_memory";
+// 🌟 CRITICAL FIX: Use standard PostgreSQL lowercase names for stability
+const GLOBAL_MEMORY_TABLE = "aesopide_global_memory"; 
+const DEVELOPER_LIBRARY_TABLE = "aesopide_developer_library"; // New table name for RAG chunks/embeddings
 
 // Track current project root (folder opened in the IDE)
 let currentRoot = process.cwd();
@@ -71,6 +72,49 @@ function getGeminiModel() {
     }
     return geminiModel;
 }
+
+// 🌟 NEW: Embedding model instance for RAG (uses a fast, dedicated model)
+let embeddingModel = null;
+function getEmbeddingModel() {
+    const apiKey =
+        process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error("GEMINI_API_KEY or VITE_GEMINI_API_KEY not set in environment");
+    }
+    if (!embeddingModel) {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        // Use text-embedding-004 model (or similar)
+        embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+    }
+    return embeddingModel;
+}
+
+// ---------------------------------------------------------------------------
+// 🌟 NEW RAG HELPER: Simple Text Chunking (Placeholder for future complexity)
+// ---------------------------------------------------------------------------
+function simpleTextChunker(content, chunkSize = 500) {
+    // For now, use a simple split based on newlines and then enforce max size
+    const sentences = content.split('\n').filter(s => s.trim().length > 0);
+    const chunks = [];
+    let currentChunk = '';
+
+    for (const sentence of sentences) {
+        if ((currentChunk.length + sentence.length) > chunkSize) {
+            if (currentChunk.length > 0) {
+                chunks.push(currentChunk.trim());
+            }
+            currentChunk = sentence;
+        } else {
+            currentChunk += (currentChunk.length > 0 ? ' ' : '') + sentence;
+        }
+    }
+    if (currentChunk.length > 0) {
+        chunks.push(currentChunk.trim());
+    }
+
+    return chunks;
+}
+
 
 function registerIpcHandlers() {
     // ---------------------------------------------------------------------------
@@ -313,7 +357,7 @@ function registerIpcHandlers() {
     // ---------------------------------------------------------------------------
     // GLOBAL MEMORY (Cross-Project via Supabase)
     // ---------------------------------------------------------------------------
-    // NOTE: This now uses the required table name: AesopIDE_global_memory
+    const GLOBAL_MEMORY_TABLE = "aesopide_global_memory"; 
 
     ipcMain.handle("globalMemory:save", async (event, knowledge) => {
         try {
@@ -322,7 +366,7 @@ function registerIpcHandlers() {
             // Use a fixed key (e.g., 'developer_insights') to store global memory for the user
             const fixedKey = 'global_developer_insights'; 
             
-            // Upsert: Inserts if key is new, updates if key exists
+            // 🌟 CRITICAL FIX: Use simple lowercase name, relying on Postgres/PostgREST standard
             const { error } = await supabase
                 .from(GLOBAL_MEMORY_TABLE) 
                 .upsert({ key: fixedKey, data: knowledge }, { onConflict: 'key' }); 
@@ -341,6 +385,7 @@ function registerIpcHandlers() {
             const supabase = getSupabaseClient();
             const fixedKey = 'global_developer_insights'; 
 
+            // 🌟 CRITICAL FIX: Use simple lowercase name, relying on Postgres/PostgREST standard
             const { data, error } = await supabase
                 .from(GLOBAL_MEMORY_TABLE)
                 .select('data')
@@ -362,6 +407,68 @@ function registerIpcHandlers() {
             return { ok: false, error: err.message || String(err) };
         }
     });
+
+    // ---------------------------------------------------------------------------
+    // 🌟 PHASE 6: DOCUMENT INGESTION SERVICE (RAG BACKEND)
+    // ---------------------------------------------------------------------------
+    const DEVELOPER_LIBRARY_TABLE = "aesopide_developer_library"; 
+
+    ipcMain.handle("ingestion:document", async (event, { content, source }) => {
+        if (!content || typeof content !== 'string') {
+             return { ok: false, error: "Ingestion requires 'content' (document text)." };
+        }
+        
+        const sourceUrl = source || 'local_document';
+
+        try {
+            const chunks = simpleTextChunker(content);
+            const supabase = getSupabaseClient();
+            const embedder = getEmbeddingModel();
+            const embeddingsToInsert = [];
+            
+            let successfulChunks = 0;
+
+            for (const chunk of chunks) {
+                // 1. Generate Vector Embedding
+                // Note: The GenAI SDK for embeddings returns a response object
+                const embeddingResponse = await embedder.embedContent({ content: chunk });
+                // The actual vector array is nested within the response
+                const embedding = embeddingResponse.embedding.values;
+
+                if (!embedding || embedding.length !== 768) {
+                    console.warn(`Skipping chunk due to invalid embedding size: ${embedding?.length}`);
+                    continue;
+                }
+
+                embeddingsToInsert.push({
+                    content: chunk,
+                    source: sourceUrl,
+                    embedding: embedding,
+                });
+            }
+
+            // 2. Store Vectors in Supabase (Use simple lowercase name)
+            if (embeddingsToInsert.length > 0) {
+                const { error } = await supabase
+                    .from(DEVELOPER_LIBRARY_TABLE) 
+                    .insert(embeddingsToInsert);
+                
+                if (error) throw error;
+                successfulChunks = embeddingsToInsert.length;
+            }
+
+            // Return a status indicating readiness for the next stage (Tool Framework/Frontend)
+            return { 
+                ok: true, 
+                message: `Successfully processed and stored ${successfulChunks} document chunks from source: ${sourceUrl}.` 
+            };
+        } catch (err) {
+            console.error("[AesopIDE ingestion:document error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
+
+
     // ---------------------------------------------------------------------------
     // PROMPT (Gemini) - used by the AI prompt window
     // ---------------------------------------------------------------------------

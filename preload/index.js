@@ -46,11 +46,18 @@ contextBridge.exposeInMainWorld("aesop", {
     },
 
     // -----------------------------------------------------------
-    // 🌟 PHASE 4.2: GLOBAL MEMORY (Supabase) - ADDED FIX
+    // PHASE 4.2: GLOBAL MEMORY (Supabase)
     // -----------------------------------------------------------
     globalMemory: {
         load: () => ipcRenderer.invoke("globalMemory:load"),
         save: (knowledge) => ipcRenderer.invoke("globalMemory:save", knowledge),
+    },
+    
+    // -----------------------------------------------------------
+    // 🌟 PHASE 6: DOCUMENT INGESTION (NEW) - ADDED FIX
+    // -----------------------------------------------------------
+    ingestion: {
+        document: (content, source) => ipcRenderer.invoke("ingestion:document", { content, source }),
     },
 
     // -----------------------------------------------------------

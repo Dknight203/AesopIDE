@@ -12,7 +12,7 @@ You are provided with several types of context:
 4.  **Global Developer Insights:** Cross-project, transferable knowledge and best practices stored in the cloud (Supabase). Use the \`loadGlobalInsights\` and \`saveGlobalInsight\` tools to manage this.
 5.  **CRITICAL INSTRUCTION: Always consult Project Knowledge and Global Insights first.** If the answer to a user's question or the necessary context for a task is found in the memory, answer directly from memory and do NOT use file system or search tools.
 
-## 🛠️ AVAILABLE TOOLS & EXECUTION (Phase 2, 3, 4, & 5)
+## 🛠️ AVAILABLE TOOLS & EXECUTION (Phase 2, 3, 4, & 6)
 
 You must use tools for all file system, command line, search, and version control operations.
 
@@ -42,6 +42,10 @@ You must use tools for all file system, command line, search, and version contro
 
 * **saveGlobalInsight(insight):** Saves **transferable developer insights, best practices, or custom rules** as a JSON object to the cloud (Supabase).
 * **loadGlobalInsights():** Loads the **global developer insights** object from the cloud.
+
+### DOCUMENT INGESTION TOOLS (Phase 6.1 - NEW)
+
+* **ingestDocument(content, source):** **Initiates the RAG pipeline to process a document.** Takes the document \`content\` (a string) and its \`source\` (URL or file name) to chunk, embed, and store in the Developer Library. Use this to expand your knowledge base.
 
 ### VERSION CONTROL & PATCH TOOLS (Phase 5.1)
 

@@ -95,7 +95,7 @@ export async function executeTool(toolName, params) {
             if (!memoryResult.ok) throw new Error(memoryResult.error || "Failed to load project memory.");
             return { knowledge: memoryResult.knowledge };
 
-        // 🌟 NEW: Global Cross-Project Memory (Supabase)
+        // --- Global Cross-Project Memory (Supabase) ---
         case 'saveGlobalInsight':
             if (!params.insight || typeof params.insight !== 'object') {
                  throw new Error("saveGlobalInsight requires an 'insight' object.");
@@ -108,7 +108,22 @@ export async function executeTool(toolName, params) {
             const loadGlobalResult = await window.aesop.globalMemory.load();
             if (!loadGlobalResult.ok) throw new Error(loadGlobalResult.error || "Failed to load global insights.");
             return { insights: loadGlobalResult.knowledge };
-
+            
+        // -----------------------------------------------------------
+        // 🌟 PHASE 6.1: INGESTION TOOL (Developer Library RAG)
+        // -----------------------------------------------------------
+        case 'ingestDocument':
+            if (!params.content || typeof params.content !== 'string') {
+                 throw new Error("ingestDocument requires 'content' (the document text).");
+            }
+            
+            const ingestResult = await window.aesop.ingestion.document(params.content, params.source || 'AI_Command');
+            
+            if (!ingestResult.ok) {
+                throw new Error(ingestResult.error || "Document ingestion failed in the backend service.");
+            }
+            
+            return { success: true, message: ingestResult.message || `Document ingested from ${params.source || 'AI_Command'}. Ready for vector processing.` };
 
         // -----------------------------------------------------------
         // PHASE 5.1: DIFF/PATCH TOOLS
@@ -166,7 +181,7 @@ export async function executeTool(toolName, params) {
             
             return {
                 command: linterCommand,
-                exitCode: linterCmdResult.exitCode,
+                exitCode: testCmdResult.exitCode,
                 // Return full output (which might be JSON or plain text depending on flags)
                 fullOutput: linterCmdResult.output,
                 summary: `Linter completed with exit code ${linterCmdResult.exitCode}. Check output for details.`
