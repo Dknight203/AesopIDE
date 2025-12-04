@@ -20,20 +20,26 @@ export default function IngestModal({ onClose, onIngest }) {
         setStatusMessage('Fetching content...');
 
         try {
-            // Fetch the URL content
-            const response = await fetch(urlInput);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            // Fetch the URL content via Backend (Bypasses CORS)
+            const result = await window.aesop.ingestion.fetchUrl(urlInput);
+            
+            if (!result.ok) {
+                throw new Error(result.error || 'Failed to fetch URL');
             }
-
-            const contentType = response.headers.get('content-type');
+            const { content: rawContent, contentType } = result;
             let content;
-
+            
             if (contentType?.includes('application/json')) {
-                const json = await response.json();
-                content = JSON.stringify(json, null, 2);
+                // Since the backend handler returns raw text content, we must parse the JSON string here.
+                try {
+                    const json = JSON.parse(rawContent);
+                    content = JSON.stringify(json, null, 2);
+                } catch (e) {
+                    // If parsing fails, use the raw content
+                    content = rawContent;
+                }
             } else {
-                const rawContent = await response.text();
+                // rawContent is already the text/html string
 
                 // If it's HTML, extract text content only (strip tags)
                 if (contentType?.includes('text/html') || rawContent.trim().startsWith('<!DOCTYPE') || rawContent.trim().startsWith('<html')) {
@@ -68,16 +74,16 @@ export default function IngestModal({ onClose, onIngest }) {
             }
 
             // Call the ingestion handler
-            const result = await window.aesop.ingestion.document(content, urlInput);
+            const ingestResult = await window.aesop.ingestion.document(content, urlInput);
 
-            if (result.ok) {
-                setStatusMessage(result.message || 'Document ingested successfully!');
+            if (ingestResult.ok) {
+                setStatusMessage(ingestResult.message || 'Document ingested successfully!');
                 setTimeout(() => {
-                    onIngest && onIngest(result);
+                    onIngest && onIngest(ingestResult);
                     onClose();
                 }, 1500);
             } else {
-                setStatusMessage(`Error: ${result.error}`);
+                setStatusMessage(`Error: ${ingestResult.error}`);
             }
         } catch (err) {
             console.error('URL fetch error:', err);

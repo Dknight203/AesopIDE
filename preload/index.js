@@ -54,11 +54,13 @@ contextBridge.exposeInMainWorld("aesop", {
     },
     
     // -----------------------------------------------------------
-    // 🌟 PHASE 6: DOCUMENT INGESTION & RETRIEVAL (RAG) - REPLACED BLOCK
+    // 🌟 PHASE 6: DOCUMENT INGESTION & RETRIEVAL (RAG)
     // -----------------------------------------------------------
     ingestion: {
         document: (content, source) => ipcRenderer.invoke("ingestion:document", { content, source }),
         query: (question) => ipcRenderer.invoke("developerLibrary:query", { question }),
+        // NEW: Expose fetchUrl
+        fetchUrl: (url) => ipcRenderer.invoke("ingestion:fetchUrl", { url }),
     },
 
     // -----------------------------------------------------------

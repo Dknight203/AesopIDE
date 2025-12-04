@@ -9,6 +9,7 @@ const { createClient } = require("@supabase/supabase-js");
 const { spawn } = require('child_process');
 const { nanoid } = require('nanoid/non-secure');
 
+
 // 検 PHASE 4 & 6 TABLE NAMES
 const GLOBAL_MEMORY_TABLE = "aesopide_global_memory"; 
 const DEVELOPER_LIBRARY_TABLE = "aesopide_developer_library"; // New table name for RAG chunks/embeddings
@@ -22,7 +23,6 @@ const commandOutput = new Map();
 
 // Normalize a "relative path" argument that might be a string or an object
 function normalizeRelPath(arg, objectKeys = []) {
-// ... (rest of function unchanged)
     if (!arg) return ".";
     if (typeof arg === "string") return arg;
 
@@ -430,6 +430,25 @@ function registerIpcHandlers() {
         }
     });
 
+    // ---------------------------------------------------------------------------
+    // NEW: Fetch URL Content (Bypasses CORS)
+    // ---------------------------------------------------------------------------
+    ipcMain.handle("ingestion:fetchUrl", async (event, { url }) => {
+        try {
+            // Using the native Node.js/Electron fetch here
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const contentType = response.headers.get('content-type');
+            const content = await response.text();
+            
+            return { ok: true, content, contentType };
+        } catch (err) {
+            console.error("[AesopIDE ingestion:fetchUrl error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
     // ---------------------------------------------------------------------------
     // 検 PHASE 6: DOCUMENT INGESTION SERVICE (RAG BACKEND)
     // ---------------------------------------------------------------------------
