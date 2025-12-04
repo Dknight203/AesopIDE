@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("aesop", {
         readDir: (arg) => ipcRenderer.invoke("fs:readDir", arg),
         newFile: (arg) => ipcRenderer.invoke("fs:newFile", arg),
         newFolder: (arg) => ipcRenderer.invoke("fs:newFolder", arg),
+        deleteFile: (arg) => ipcRenderer.invoke("fs:deleteFile", arg),
     },
 
     // -----------------------------------------------------------
@@ -21,7 +22,7 @@ contextBridge.exposeInMainWorld("aesop", {
         getRoot: () => ipcRenderer.invoke("project:getRoot"),
         openFolder: () => ipcRenderer.invoke("project:openFolder"),
     },
-    
+
     // -----------------------------------------------------------
     // AI PROMPT/LLM
     // -----------------------------------------------------------
@@ -52,7 +53,7 @@ contextBridge.exposeInMainWorld("aesop", {
         load: () => ipcRenderer.invoke("globalMemory:load"),
         save: (knowledge) => ipcRenderer.invoke("globalMemory:save", knowledge),
     },
-    
+
     // -----------------------------------------------------------
     // 🌟 PHASE 6: DOCUMENT INGESTION (NEW) - ADDED FIX
     // -----------------------------------------------------------

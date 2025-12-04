@@ -1,5 +1,5 @@
 // src/renderer/components/FileTree.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import "../styles/sidebar.css";
 import { readDirectory, deleteFile } from "../lib/fileSystem";
 import ContextMenu from "./ContextMenu";
@@ -75,26 +75,80 @@ export default function FileTree({ rootPath, onOpenFile }) {
     const [contextMenu, setContextMenu] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
+    const nodesRef = useRef(nodes);
+    useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+
+    async function loadRoot() {
+        try {
+            const entries = await readDirectory(".");
+            const mapped = entries.map((e) => ({
+                name: e.name,
+                path: e.name,
+                isDirectory: e.isDirectory,
+                expanded: false,
+                children: [],
+                level: 0,
+            }));
+            setNodes(mapped);
+        } catch (err) {
+            console.error("FileTree load error:", err);
+        }
+    }
+
     useEffect(() => {
-        async function loadRoot() {
+        loadRoot();
+    }, [rootPath]);
+
+    async function refresh() {
+        // 1. Get list of currently expanded paths
+        const expandedPaths = new Set();
+        function collectExpanded(list) {
+            for (const node of list) {
+                if (node.expanded) {
+                    expandedPaths.add(node.path);
+                    if (node.children) collectExpanded(node.children);
+                }
+            }
+        }
+        collectExpanded(nodesRef.current);
+
+        // 2. Re-build the tree
+        async function buildTree(dirPath, level) {
             try {
-                const entries = await readDirectory(".");
-                const mapped = entries.map((e) => ({
-                    name: e.name,
-                    path: e.name,
-                    isDirectory: e.isDirectory,
-                    expanded: false,
-                    children: [],
-                    level: 0,
-                }));
-                setNodes(mapped);
+                const entries = await readDirectory(dirPath);
+                const newNodes = [];
+                for (const e of entries) {
+                    const fullPath = dirPath === '.' ? e.name : `${dirPath}/${e.name}`;
+                    const node = {
+                        name: e.name,
+                        path: fullPath,
+                        isDirectory: e.isDirectory,
+                        expanded: expandedPaths.has(fullPath),
+                        children: [],
+                        level: level
+                    };
+
+                    if (node.expanded) {
+                        node.children = await buildTree(fullPath, level + 1);
+                    }
+                    newNodes.push(node);
+                }
+                return newNodes;
             } catch (err) {
-                console.error("FileTree load error:", err);
+                console.error(`Error reading ${dirPath}:`, err);
+                return [];
             }
         }
 
-        loadRoot();
-    }, [rootPath]);
+        const newRoot = await buildTree(".", 0);
+        setNodes(newRoot);
+    }
+
+    // Auto-refresh every 5 seconds
+    useEffect(() => {
+        const interval = setInterval(refresh, 5000);
+        return () => clearInterval(interval);
+    }, []);
 
     async function toggleFolder(target) {
         if (!target.isDirectory) return;
@@ -295,28 +349,43 @@ export default function FileTree({ rootPath, onOpenFile }) {
             <div className="panel-header">
                 <span className="panel-title">Explorer</span>
                 <div className="panel-actions">
-                    {/* Future: Add refresh, collapse all buttons */}
                 </div>
             </div>
-            {/* Phase 2: Search bar */}
             <div className="explorer-search-container">
-                <span className="search-icon">🔍</span>
-                <input
-                    type="text"
-                    className="explorer-search-input"
-                    placeholder="Search files..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                    <button
-                        className="search-clear-btn"
-                        onClick={() => setSearchQuery("")}
-                        title="Clear search"
-                    >
-                        ×
-                    </button>
-                )}
+                <div className="explorer-search-wrapper">
+                    <span className="search-icon">🔍</span>
+                    <input
+                        type="text"
+                        className="explorer-search-input"
+                        placeholder="Search files..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery && (
+                        <button
+                            className="search-clear-btn"
+                            onClick={() => setSearchQuery("")}
+                        >
+                            ✕
+                        </button>
+                    )}
+                </div>
+                <button
+                    className="refresh-btn"
+                    onClick={refresh}
+                    title="Refresh"
+                    style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        marginLeft: '4px',
+                        fontSize: '14px'
+                    }}
+                >
+                    🔄
+                </button>
             </div>
             <div className="filetree-scroll scrollable">
                 {filteredFlat.length === 0 && (
