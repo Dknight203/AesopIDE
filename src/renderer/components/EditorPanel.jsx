@@ -1,7 +1,9 @@
 // src/renderer/components/EditorPanel.jsx
+// src/renderer/components/EditorPanel.jsx
 import React, { useRef, useEffect, useState } from "react";
 import "../styles/editor.css";
-import ContextMenu from "./ContextMenu"; // <-- ADDED IMPORT
+import ContextMenu from "./ContextMenu";
+import SearchBar from './SearchBar';
 
 export default function EditorPanel({ activeTab, onChangeContent, onSave }) {
     const content = activeTab?.content ?? "";
@@ -9,6 +11,9 @@ export default function EditorPanel({ activeTab, onChangeContent, onSave }) {
     const textareaRef = useRef(null);
     const lineNumbersRef = useRef(null);
     const [editorContextMenu, setEditorContextMenu] = useState(null); // <-- ADDED STATE
+    const [showSearch, setShowSearch] = useState(false);
+    const [searchMatches, setSearchMatches] = useState([]);
+    const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
 
     // Sync scroll between textarea and line numbers
     const handleScroll = () => {
@@ -16,6 +21,18 @@ export default function EditorPanel({ activeTab, onChangeContent, onSave }) {
             lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
         }
     };
+    // Ctrl+F keyboard shortcut
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                setShowSearch(true);
+            }
+        };
+        
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     // <-- FIXED CONTEXT MENU HANDLER -->
     function handleEditorContextMenu(e) {
@@ -75,6 +92,63 @@ export default function EditorPanel({ activeTab, onChangeContent, onSave }) {
     // Generate line numbers
     const lineCount = content.split('\n').length;
     const lineNumbers = Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
+
+    // Search functions
+    const handleFind = (searchTerm, options) => {
+        if (!textareaRef.current || !searchTerm) return;
+        
+        const text = textareaRef.current.value;
+        const searchRegex = new RegExp(
+            searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+            options.caseSensitive ? 'g' : 'gi'
+        );
+        
+        const matches = [];
+        let match;
+        while ((match = searchRegex.exec(text)) !== null) {
+            matches.push({ index: match.index, length: searchTerm.length });
+        }
+        
+        setSearchMatches(matches);
+        if (matches.length > 0) {
+            const index = options.direction === 'prev' 
+                ? (currentMatchIndex <= 0 ? matches.length - 1 : currentMatchIndex - 1)
+                : (currentMatchIndex >= matches.length - 1 ? 0 : currentMatchIndex + 1);
+            
+            setCurrentMatchIndex(index);
+            textareaRef.current.setSelectionRange(
+                matches[index].index,
+                matches[index].index + matches[index].length
+            );
+            textareaRef.current.focus();
+        }
+    };
+    const handleReplace = (searchTerm, replaceTerm, options) => {
+        if (!textareaRef.current || !searchTerm) return;
+        
+        const start = textareaRef.current.selectionStart;
+        const end = textareaRef.current.selectionEnd;
+        const text = textareaRef.current.value;
+        
+        if (text.substring(start, end) === searchTerm || 
+            (!options.caseSensitive && text.substring(start, end).toLowerCase() === searchTerm.toLowerCase())) {
+            const newText = text.substring(0, start) + replaceTerm + text.substring(end);
+            onChangeContent(newText);
+            textareaRef.current.setSelectionRange(start, start + replaceTerm.length);
+        }
+    };
+    const handleReplaceAll = (searchTerm, replaceTerm, options) => {
+        if (!textareaRef.current || !searchTerm) return;
+        
+        const text = textareaRef.current.value;
+        const searchRegex = new RegExp(
+            searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+            options.caseSensitive ? 'g' : 'gi'
+        );
+        
+        const newText = text.replace(searchRegex, replaceTerm);
+        onChangeContent(newText);
+    };
 
     if (!activeTab) {
         return (
@@ -137,7 +211,16 @@ export default function EditorPanel({ activeTab, onChangeContent, onSave }) {
                     onClose={() => setEditorContextMenu(null)}
                 />
             )}
-            {/* <-- END CONTEXT MENU RENDERER --> */}
+            
+            {/* ← ADD THIS BLOCK */}
+            {showSearch && (
+                <SearchBar
+                    onClose={() => setShowSearch(false)}
+                    onFind={handleFind}
+                    onReplace={handleReplace}
+                    onReplaceAll={handleReplaceAll}
+                />
+            )}
         </div>
     );
 }
