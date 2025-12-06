@@ -1,4 +1,5 @@
 // src/renderer/lib/tools/framework.js
+import { terminalEvents } from "../events/terminalEvents";
 
 /**
  * Executes a tool called by the AI model by mapping the tool name 
@@ -49,47 +50,54 @@ export async function executeTool(toolName, params) {
             return { results: searchResult.results };
 
         case 'getFileTree':
-            const treeEntries = await window.aesop.fs.readDir('.');
-            return { entries: treeEntries, path: '.' };
+            // Notify UI that a command is starting
+            terminalEvents.emit('command-start', { command: params.cmd });
 
-        // -----------------------------------------------------------
-        // 3.4 Core Tools: Command Execution
-        // -----------------------------------------------------------
-        case 'runCommand':
-            if (!params.cmd) throw new Error("runCommand requires a 'cmd' parameter with the command string.");
-            
-            const cmdResult = await window.aesop.tools.runCommand(params.cmd);
-            
-            if (!cmdResult.ok) throw new Error(cmdResult.error || `Command failed with exit code ${cmdResult.exitCode || 'N/A'}`);
-            
-            return {
-                id: cmdResult.id,
-                command: params.cmd,
-                exitCode: cmdResult.exitCode,
-                outputPreview: cmdResult.output.substring(0, 500) + (cmdResult.output.length > 500 ? '... (truncated)' : '')
-            };
+            try {
+                const cmdResult = await window.aesop.tools.runCommand(params.cmd);
+
+                if (!cmdResult.ok) {
+                    const errorMsg = cmdResult.error || `Command failed with exit code ${cmdResult.exitCode || 'N/A'}`;
+                    terminalEvents.emit('command-error', { error: errorMsg });
+                    throw new Error(errorMsg);
+                }
+
+                // Notify UI of output
+                terminalEvents.emit('command-output', { output: cmdResult.output });
+                terminalEvents.emit('command-end', { exitCode: cmdResult.exitCode });
+
+                return {
+                    id: cmdResult.id,
+                    command: params.cmd,
+                    exitCode: cmdResult.exitCode,
+                    outputPreview: cmdResult.output.substring(0, 500) + (cmdResult.output.length > 500 ? '... (truncated)' : '')
+                };
+            } catch (err) {
+                terminalEvents.emit('command-error', { error: err.message });
+                throw err;
+            }
 
         case 'getCommandOutput':
             if (!params.id) throw new Error("getCommandOutput requires an 'id' parameter (from runCommand).");
-            
+
             const outputResult = await window.aesop.tools.getCommandOutput(params.id);
-            
+
             if (!outputResult.ok) throw new Error(outputResult.error || "Could not retrieve command output.");
-            
+
             return { id: params.id, output: outputResult.output };
-            
+
         // -----------------------------------------------------------
         // PHASE 4.2: PROJECT MEMORY TOOLS (Local & Global)
         // -----------------------------------------------------------
-        
+
         // --- Project-Specific Memory (Local) ---
         case 'saveKnowledge':
             if (!params.knowledge || typeof params.knowledge !== 'object') {
-                 throw new Error("saveKnowledge requires a 'knowledge' object.");
+                throw new Error("saveKnowledge requires a 'knowledge' object.");
             }
             await window.aesop.memory.save(params.knowledge);
             return { success: true };
-            
+
         case 'loadKnowledge':
             const memoryResult = await window.aesop.memory.load();
             if (!memoryResult.ok) throw new Error(memoryResult.error || "Failed to load project memory.");
@@ -98,12 +106,12 @@ export async function executeTool(toolName, params) {
         // --- Global Cross-Project Memory (Supabase) ---
         case 'saveGlobalInsight':
             if (!params.insight || typeof params.insight !== 'object') {
-                 throw new Error("saveGlobalInsight requires an 'insight' object.");
+                throw new Error("saveGlobalInsight requires an 'insight' object.");
             }
             const saveGlobalResult = await window.aesop.globalMemory.save(params.insight);
             if (!saveGlobalResult.ok) throw new Error(saveGlobalResult.error || "Failed to save global insight.");
             return { success: true };
-            
+
         case 'loadGlobalInsights':
             const loadGlobalResult = await window.aesop.globalMemory.load();
             if (!loadGlobalResult.ok) throw new Error(loadGlobalResult.error || "Failed to load global insights.");
@@ -114,15 +122,15 @@ export async function executeTool(toolName, params) {
         // -----------------------------------------------------------
         case 'ingestDocument':
             if (!params.content || typeof params.content !== 'string') {
-                 throw new Error("ingestDocument requires 'content' (the document text).");
+                throw new Error("ingestDocument requires 'content' (the document text).");
             }
-            
+
             const ingestResult = await window.aesop.ingestion.document(params.content, params.source || 'AI_Command');
-            
+
             if (!ingestResult.ok) {
                 throw new Error(ingestResult.error || "Document ingestion failed in the backend service.");
             }
-            
+
             return { success: true, message: ingestResult.message || `Document ingested from ${params.source || 'AI_Command'}. Ready for vector processing.` };
 
         // -----------------------------------------------------------
@@ -156,18 +164,18 @@ export async function executeTool(toolName, params) {
             }
             const patchResult = await window.aesop.git.applyPatch(params.patchContent);
             if (!patchResult.ok) {
-                throw new Error(patchResult.error || "Patch application failed."); 
+                throw new Error(patchResult.error || "Patch application failed.");
             }
             return { success: true, message: patchResult.output };
-            
+
         // -----------------------------------------------------------
         // PHASE 5.2: TESTING INTEGRATION
         // -----------------------------------------------------------
         case 'runTests':
             const testCommand = params.script || 'npm test';
-            
+
             const testCmdResult = await window.aesop.tools.runCommand(testCommand);
-            
+
             if (!testCmdResult.ok) {
                 throw new Error(testCmdResult.error || `Test command failed to execute: ${testCommand}`);
             }
@@ -184,18 +192,18 @@ export async function executeTool(toolName, params) {
         // -----------------------------------------------------------
         case 'runLinter':
             // Linter command can include --fix for auto-fixing
-            const linterCommand = params.cmd || 'npm run lint -- --format json'; 
+            const linterCommand = params.cmd || 'npm run lint -- --format json';
 
             const linterCmdResult = await window.aesop.tools.runCommand(linterCommand);
 
             // A linter command failing (exitCode > 0) usually just means errors were found, not that the command crashed.
             if (!linterCmdResult.ok) {
                 // If the command failed to execute (not just exit with errors), throw.
-                 if (linterCmdResult.error && !linterCmdResult.error.includes('exit code')) {
+                if (linterCmdResult.error && !linterCmdResult.error.includes('exit code')) {
                     throw new Error(linterCmdResult.error || `Linter command failed to execute: ${linterCommand}`);
-                 }
+                }
             }
-            
+
             return {
                 command: linterCommand,
                 exitCode: testCmdResult.exitCode,

@@ -1,9 +1,7 @@
 // src/renderer/components/Terminal.jsx
 import React, { useState, useRef, useEffect } from "react";
 import "../styles/terminal.css";
-
-// Assuming logToTerminal is used for debugging/messages, but we'll use local state for terminal output
-// import { logToTerminal } from "../lib/logger"; 
+import { terminalEvents } from "../lib/events/terminalEvents";
 
 export default function Terminal() {
     const [output, setOutput] = useState([
@@ -29,8 +27,46 @@ export default function Terminal() {
 
     // Function to append text to the terminal output
     const appendOutput = (text) => {
+        if (!text) return;
         setOutput((prev) => [...prev, ...text.split('\n')]);
     };
+
+    // Subscribe to Agent Command Events (Phase 8.1)
+    useEffect(() => {
+        const handleStart = ({ command }) => {
+            appendOutput(`$ ${command} (Agent)`);
+            setIsRunning(true);
+        };
+
+        const handleOutput = ({ output }) => {
+            appendOutput(output);
+        };
+
+        const handleEnd = ({ exitCode }) => {
+            setIsRunning(false);
+            if (exitCode !== 0) {
+                appendOutput(`❌ Agent command failed with exit code ${exitCode}`);
+            }
+        };
+
+        const handleError = ({ error }) => {
+            setIsRunning(false);
+            appendOutput(`❌ Agent command error: ${error}`);
+        };
+
+        // Subscribe
+        const unsubStart = terminalEvents.on('command-start', handleStart);
+        const unsubOutput = terminalEvents.on('command-output', handleOutput);
+        const unsubEnd = terminalEvents.on('command-end', handleEnd);
+        const unsubError = terminalEvents.on('command-error', handleError);
+
+        return () => {
+            unsubStart();
+            unsubOutput();
+            unsubEnd();
+            unsubError();
+        };
+    }, []);
 
     async function handleCommandSubmit() {
         const command = input.trim();
@@ -40,23 +76,25 @@ export default function Terminal() {
         setCommandHistory((prev) => [command, ...prev].slice(0, 20)); // Keep last 20
         setHistoryIndex(-1);
         setInput("");
-        
+
         setIsRunning(true);
         appendOutput(`$ ${command}`); // Echo the command
 
         try {
             // 2. Call IPC handler to run the command
-            // window.aesop.tools.runCommand(command) maps to "cmd:run" IPC
             const result = await window.aesop.tools.runCommand(command);
 
             if (!result.ok) {
                 appendOutput(`❌ Command Failed: ${result.error || "Unknown Error"}`);
                 if (result.output) {
-                     appendOutput(result.output);
+                    appendOutput(result.output);
                 }
             } else {
                 // Success: Display full output
                 appendOutput(result.output);
+            }
+            if (result.id) {
+                setActiveCommandId(result.id);
             }
         } catch (err) {
             console.error("[Terminal Command Error]", err);
@@ -103,8 +141,8 @@ export default function Terminal() {
                 </span>
                 <div className="terminal-actions">
                     {isRunning && (
-                        <button 
-                            className="terminal-action-btn danger" 
+                        <button
+                            className="terminal-action-btn danger"
                             onClick={() => window.aesop.tools.killCommand(activeCommandId)}
                             title="Kill active process"
                         >
@@ -150,7 +188,7 @@ export default function Terminal() {
                     onKeyDown={handleKeyDown}
                     disabled={isRunning}
                 />
-                <button 
+                <button
                     className="terminal-run-btn primary"
                     onClick={handleCommandSubmit}
                     disabled={!input.trim() || isRunning}

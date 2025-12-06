@@ -673,8 +673,6 @@ function registerIpcHandlers() {
                             if (embedding && embedding.length === 768) {
                                 // Store in developer library
                                 await supabase.from(DEVELOPER_LIBRARY_TABLE).insert({
-                                    content: groundedContent,
-                                    source: `google_search:${query}`,
                                     embedding: embedding
                                 });
                                 console.log(`[Phase 16] Auto-ingested grounding for query: ${query}`);
@@ -689,7 +687,7 @@ function registerIpcHandlers() {
             return {
                 ok: true,
                 text: outText,
-                groundingMetadata: groundingMetadata // Include metadata in response
+                groundingMetadata: groundingMetadata
             };
         } catch (err) {
             console.error("[AesopIDE prompt:send error]", err);
@@ -697,6 +695,23 @@ function registerIpcHandlers() {
         }
     });
 
+    ipcMain.handle("fs:deleteFile", async (event, targetPath) => {
+        try {
+            if (!targetPath) {
+                return { ok: false, error: "No target path specified" };
+            }
+            const stats = await fs.stat(targetPath);
+            if (stats.isDirectory()) {
+                await fs.rm(targetPath, { recursive: true, force: true });
+            } else {
+                await fs.unlink(targetPath);
+            }
+            return { ok: true };
+        } catch (err) {
+            console.error("[AesopIDE fs:deleteFile error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
 
     // ---------------------------------------------------------------------------
     // GIT using simple-git
