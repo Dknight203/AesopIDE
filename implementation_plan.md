@@ -56,6 +56,36 @@ Create the visual interface for multi-step task execution with user controls.
 
 ---
 
+## Phase 6.5: Rich Artifacts (Pending)
+
+### Overview
+Enhance the rendering of AI plans and chat outputs with rich media, diagrams, and improved formatting.
+
+### Proposed Changes
+
+#### [MODIFY] [package.json](file:///c:/DevApps/AesopIDE/package.json)
+- Add `mermaid` dependency for diagram rendering
+
+#### [MODIFY] [src/renderer/components/PlanReview.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PlanReview.jsx)
+- Implement Mermaid diagram rendering for visual plan representation
+- Add support for rendering complex markdown tables and formatting
+
+#### [MODIFY] [src/renderer/components/PromptPanel.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PromptPanel.jsx)
+- Enhance chat message rendering to support rich markdown features (tables, alerts, etc.)
+
+#### [NEW] [src/renderer/styles/markdown.css](file:///c:/DevApps/AesopIDE/src/renderer/styles/markdown.css)
+- Add dedicated styles for rich markdown elements (tables, blockquotes, mermaid diagrams)
+
+### Verification Plan
+
+#### Manual Verification
+1. Create a plan that includes a Mermaid diagram code block.
+2. Verify it renders as a visual diagram in PlanReview.
+3. Send a chat message with a markdown table.
+4. Verify it is styled correctly in PromptPanel.
+
+---
+
 ## Phase 7: Asynchronous Task Management
 **byLLM Integration:** ✅ Uses RAG to query task orchestration best practices
 

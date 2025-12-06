@@ -14,6 +14,9 @@
     "concurrently": "^8.2.0",
     "dotenv": "^17.2.3",
     "electron": "^28.0.0",
+    "mermaid": "^11.12.2",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "simple-git": "^3.19.1",
     "wait-on": "^9.0.3"
   },

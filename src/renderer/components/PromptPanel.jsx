@@ -7,6 +7,10 @@ import { buildFileContext } from "../lib/codebase/context";
 import parseToolCalls from "../lib/ai/toolParser";
 import { executeTool } from "../lib/tools/framework";
 import ContextMenu from "./ContextMenu";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import Mermaid from './Mermaid';
+import '../styles/markdown.css';
 
 
 export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activeTab, rootPath, codebaseIndex, initialPrompt, onClearInitialPrompt }) {
@@ -603,54 +607,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     }
 
 
-    function renderMessageContent(content) {
-        if (!content || typeof content !== "string") return content;
-
-
-        // Pattern to match file paths (e.g., src/components/Header.tsx)
-        const filePathPattern = /((?:[\w-]+\/)*[\w-]+\.\w+)/g;
-        const parts = [];
-        let lastIndex = 0;
-        let match;
-
-
-        while ((match = filePathPattern.exec(content)) !== null) {
-            // Add text before the match
-            if (match.index > lastIndex) {
-                parts.push(content.substring(lastIndex, match.index));
-            }
-
-
-            // Add clickable file link
-            const filePath = match[1];
-            parts.push(
-                <span
-                    key={`file-${match.index}`}
-                    className="file-link"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (onApplyCode) {
-                            onApplyCode(`AesopIDE open file: ${filePath}`);
-                        }
-                    }}
-                    title={`Click to open ${filePath}`}
-                >
-                    {filePath}
-                </span>
-            );
-            lastIndex = match.index + match[0].length;
-        }
-
-
-        // Add remaining text
-        if (lastIndex < content.length) {
-            parts.push(content.substring(lastIndex));
-        }
-
-
-        return parts.length > 0 ? parts : content;
-    }
-
+    // Replaced renderMessageContent logic with ReactMarkdown in renderMessage
 
     function renderMessage(message, index) {
         const isUser = message.role === "user";
@@ -700,7 +657,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                     </span>
                 </div>
                 <div
-                    className="message-content"
+                    className="message-content markdown-body" // Added markdown-body class
                     onDoubleClick={
                         message.role === "assistant" || message.role === "tool_result"
                             ? () => copyToClipboard(message.content)
@@ -710,7 +667,62 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                     {isTool ? (
                         <span style={{ fontStyle: 'italic' }}>{displayContent}</span>
                     ) : (
-                        renderMessageContent(displayContent)
+                        <ReactMarkdown
+                            children={displayContent}
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                                code({ node, inline, className, children, ...props }) {
+                                    const match = /language-(\w+)/.exec(className || '')
+                                    const language = match ? match[1] : ''
+
+                                    if (!inline && language === 'mermaid') {
+                                        return <Mermaid chart={String(children).replace(/\n$/, '')} />
+                                    }
+
+                                    return !inline && match ? (
+                                        <pre className={className}>
+                                            <code className={className} {...props}>
+                                                {children}
+                                            </code>
+                                        </pre>
+                                    ) : (
+                                        <code className={className} {...props}>
+                                            {children}
+                                        </code>
+                                    )
+                                },
+                                // Intercept links to handle file clicks
+                                a({ node, children, href, ...props }) {
+                                    // If it looks like a file path, handle it
+                                    // This regex is basic, might need refinement based on context
+                                    // But markdown links to files usually look like [label](path)
+                                    // We can just rely on the onClick behavior
+                                    return (
+                                        <a href={href} onClick={(e) => {
+                                            e.preventDefault();
+                                            // Check if it's a file path we can open
+                                            // For now simpler to just let it be a link or 
+                                            // if onApplyCode handles "open file" we could try that
+                                            // But for safety let's leave default behavior or implement
+                                            // explicit file link handling if needed.
+                                            // The previous regex parsed plain text paths. 
+                                            // ReactMarkdown won't auto-linkify plain text paths unless formatted as links.
+                                            // We might lose "auto-linkification" of plain text paths with this change,
+                                            // but we gain proper markdown rendering.
+                                            // To restore file clicking for plain text, we'd need a remark plugin or processing.
+                                            // For now, assume users/AI use proper links or file paths are in code blocks.
+                                            if (onApplyCode && href && !href.startsWith('http')) {
+                                                onApplyCode(`AesopIDE open file: ${href}`);
+                                            } else if (href && href.startsWith('http')) {
+                                                window.open(href, '_blank');
+                                            }
+                                        }} {...props}>
+                                            {children}
+                                        </a>
+                                    )
+                                }
+                            }}
+                        />
                     )}
                 </div>
                 {message.role === "assistant" && onApplyCode && hasActionableContent(message.content) && (
