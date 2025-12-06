@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld("aesop", {
         newFile: (arg) => ipcRenderer.invoke("fs:newFile", arg),
         newFolder: (arg) => ipcRenderer.invoke("fs:newFolder", arg),
         deleteFile: (path) => ipcRenderer.invoke("fs:deleteFile", path),
+        revealInExplorer: (path) => ipcRenderer.invoke("fs:revealInExplorer", path),
+        openTerminal: (path) => ipcRenderer.invoke("fs:openTerminal", path),
     },
 
     // -----------------------------------------------------------

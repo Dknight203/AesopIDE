@@ -1,8 +1,7 @@
-// ipcHandlers.js
-const { ipcMain, dialog, BrowserWindow } = require("electron");
-const path = require("path");
+const { ipcMain, dialog, BrowserWindow, shell } = require("electron");
 const fs = require("fs").promises;
 const fsSync = require("fs");
+const path = require("path");
 const simpleGit = require("simple-git");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
@@ -713,20 +712,62 @@ function registerIpcHandlers() {
         }
     });
 
-    // ---------------------------------------------------------------------------
-    // GIT using simple-git
-    // ---------------------------------------------------------------------------
+    ipcMain.handle("fs:revealInExplorer", async (event, targetPath) => {
+        try {
+            if (!targetPath) return { ok: false, error: "No path" };
+            const root = ensureRoot();
+            const fullPath = path.isAbsolute(targetPath)
+                ? targetPath
+                : path.join(root, targetPath);
+
+            shell.showItemInFolder(fullPath);
+            return { ok: true };
+        } catch (err) {
+            console.error("[AesopIDE fs:revealInExplorer error]", err);
+            return { ok: false, error: err.message };
+        }
+    });
+
+    ipcMain.handle("fs:openTerminal", async (event, targetPath) => {
+        try {
+            if (!targetPath) return { ok: false, error: "No path" };
+            const root = ensureRoot();
+            const fullPath = path.isAbsolute(targetPath)
+                ? targetPath
+                : path.join(root, targetPath);
+
+            let dir = fullPath;
+            try {
+                const stats = await fs.stat(fullPath);
+                if (!stats.isDirectory()) {
+                    dir = path.dirname(fullPath);
+                }
+            } catch (e) {
+                dir = path.dirname(fullPath);
+            }
+
+            if (process.platform === 'win32') {
+                spawn('start', ['cmd', '/k', `cd /d "${dir}"`], { shell: true });
+            } else if (process.platform === 'darwin') {
+                spawn('open', ['-a', 'Terminal', dir]);
+            } else {
+                spawn('x-terminal-emulator', [], { cwd: dir });
+            }
+            return { ok: true };
+        } catch (err) {
+            console.error("[AesopIDE fs:openTerminal error]", err);
+            return { ok: false, error: err.message };
+        }
+    });
 
     function getGit() {
         const baseDir = ensureRoot();
         return simpleGit({ baseDir });
     }
 
-    // PHASE 5.1: New Git Command
     ipcMain.handle("git:diff", async () => {
         try {
             const git = getGit();
-            // Get the diff of all uncommitted changes in the working directory
             const diff = await git.diff();
             return { ok: true, diff };
         } catch (err) {

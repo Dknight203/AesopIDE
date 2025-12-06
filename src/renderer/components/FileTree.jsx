@@ -277,6 +277,24 @@ export default function FileTree({ rootPath, onOpenFile }) {
                     navigator.clipboard.writeText(node.path);
                 }
             },
+            {
+                label: 'Reveal in File Explorer',
+                icon: '📂',
+                onClick: () => {
+                    if (window.aesop?.fs?.revealInExplorer) {
+                        window.aesop.fs.revealInExplorer(node.path);
+                    }
+                }
+            },
+            {
+                label: 'Open in Terminal',
+                icon: '💻', // Using a generic laptop/terminal icon
+                onClick: () => {
+                    if (window.aesop?.fs?.openTerminal) {
+                        window.aesop.fs.openTerminal(node.path);
+                    }
+                }
+            },
             { separator: true },
             {
                 label: 'Delete',
