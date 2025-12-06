@@ -24,14 +24,17 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     const messagesContainerRef = useRef(null); // <-- ADDED REF
-    
+
     const [promptContextMenu, setPromptContextMenu] = useState(null);
 
     // NEW STATE: For Project Knowledge (Local)
     const [projectKnowledge, setProjectKnowledge] = useState({});
-    
+
     // 🌟 NEW STATE: For Global Knowledge (Supabase/Cloud)
     const [globalKnowledge, setGlobalKnowledge] = useState({});
+
+    // Phase 16: Live Web Search mode (off | auto | always)
+    const [searchMode, setSearchMode] = useState('auto'); // Default: auto (smart mode)
 
     // NEW EFFECT: Handle initial prompt injection from the parent
     useEffect(() => {
@@ -74,11 +77,11 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
         loadKnowledge();
     }, [rootPath]);
-    
+
     // -----------------------------------------------------------
     // 🌟 NEW EFFECT: GLOBAL MEMORY LOAD (Cloud Supabase)
     // -----------------------------------------------------------
-    
+
     // Load global knowledge once on mount
     useEffect(() => {
         async function loadGlobalKnowledge() {
@@ -95,7 +98,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                 setGlobalKnowledge({});
             }
         }
-        
+
         loadGlobalKnowledge();
     }, []); // Empty dependency array means this runs only once on component mount
 
@@ -168,10 +171,10 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     async function handleMemorySave(userText) {
         // --- START FIX: Use two regexes for flexible command parsing ---
         // 1. Verb first: (remember|note|...) [that] [:,|-] (CONTENT)
-        const SAVE_STARTING_REGEX = 
+        const SAVE_STARTING_REGEX =
             /^(?:remember|keep in mind|note|memorize)\s*(?:that)?\s*(?::|,|-)?\s*(.*)$/i;
         // 2. Verb last: (CONTENT) [.,|] (remember this|note this|...)
-        const SAVE_TRAILING_REGEX = 
+        const SAVE_TRAILING_REGEX =
             /^(.*)(?:,\s*|\.\s*)\s*(?:remember this|keep this in mind|note this|memorize this)\s*\.?$/i;
 
         let contentToSave = null;
@@ -185,7 +188,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                 contentToSave = match[1].trim();
             }
         }
-        
+
         if (!contentToSave) return false; // No content found or no match
 
         const knowledgeKey = "custom_instructions";
@@ -202,13 +205,13 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
             timestamp: new Date(),
         };
         // Add user message immediately
-        setMessages((prev) => [...prev, userMessage]); 
+        setMessages((prev) => [...prev, userMessage]);
         setInput("");
-        
+
         try {
             // Check if the user wants to save to GLOBAL memory (not yet implemented as a tool, but we can intercept)
             // For now, assume this function only saves to local project knowledge (projectKnowledge)
-            await window.aesop.memory.save(updatedKnowledge); 
+            await window.aesop.memory.save(updatedKnowledge);
             setProjectKnowledge(updatedKnowledge);
 
             const confirmationMessage = {
@@ -216,9 +219,9 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                 content: `Acknowledged. I've saved the following project knowledge: **${newKnowledgeValue}**.\n\nI will use this information when responding to your future requests.`,
                 timestamp: new Date(),
             };
-            
+
             // Add confirmation message
-            setMessages((prev) => [...prev, confirmationMessage]); 
+            setMessages((prev) => [...prev, confirmationMessage]);
             return true; // Memory saved successfully
 
         } catch (err) {
@@ -244,7 +247,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         if (isMemoryRequest) {
             return; // Exit if the command was handled by memory save
         }
-        
+
         // INTERCEPT RENDERER-SIDE OPEN COMMANDS (existing logic)
         const OPEN_COMMAND_REGEX = /^(?:bring up|open|show|display)\s+(.+?)$/i;
         const match = text.trim().match(OPEN_COMMAND_REGEX);
@@ -305,88 +308,88 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
         }
     }
 
-function handlePromptContextMenu(e) {
-    // CRITICAL FIX: Always prevent the default context menu to ensure our custom one is reliable.
-    e.preventDefault(); 
-    
-    const textarea = inputRef.current;
-    // Determine if text is selected to enable Cut/Copy
-    const hasSelection = textarea && textarea.selectionStart !== textarea.selectionEnd;
-    
-    const items = [
-        {
-            label: 'Cut',
-            icon: '✂️',
-            shortcut: 'Ctrl+X',
-            disabled: !hasSelection,
-            onClick: () => {
-                document.execCommand('cut');
-            }
-        },
-        {
-            label: 'Copy',
-            icon: '📋',
-            shortcut: 'Ctrl+C',
-            disabled: !hasSelection,
-            onClick: () => {
-                document.execCommand('copy');
-            }
-        },
-        {
-            label: 'Paste',
-            icon: '📄',
-            shortcut: 'Ctrl+V',
-            onClick: () => {
-                document.execCommand('paste');
-            }
-        },
-        { separator: true },
-        {
-            label: 'Clear',
-            icon: '🗑️',
-            onClick: () => {
-                setInput('');
-            }
-        },
-        {
-            label: 'Select All',
-            icon: '🔲',
-            shortcut: 'Ctrl+A',
-            onClick: () => {
-                if (textarea) {
-                    textarea.select();
+    function handlePromptContextMenu(e) {
+        // CRITICAL FIX: Always prevent the default context menu to ensure our custom one is reliable.
+        e.preventDefault();
+
+        const textarea = inputRef.current;
+        // Determine if text is selected to enable Cut/Copy
+        const hasSelection = textarea && textarea.selectionStart !== textarea.selectionEnd;
+
+        const items = [
+            {
+                label: 'Cut',
+                icon: '✂️',
+                shortcut: 'Ctrl+X',
+                disabled: !hasSelection,
+                onClick: () => {
+                    document.execCommand('cut');
+                }
+            },
+            {
+                label: 'Copy',
+                icon: '📋',
+                shortcut: 'Ctrl+C',
+                disabled: !hasSelection,
+                onClick: () => {
+                    document.execCommand('copy');
+                }
+            },
+            {
+                label: 'Paste',
+                icon: '📄',
+                shortcut: 'Ctrl+V',
+                onClick: () => {
+                    document.execCommand('paste');
+                }
+            },
+            { separator: true },
+            {
+                label: 'Clear',
+                icon: '🗑️',
+                onClick: () => {
+                    setInput('');
+                }
+            },
+            {
+                label: 'Select All',
+                icon: '🔲',
+                shortcut: 'Ctrl+A',
+                onClick: () => {
+                    if (textarea) {
+                        textarea.select();
+                    }
                 }
             }
-        }
-    ];
-    
-    setPromptContextMenu({ x: e.clientX, y: e.clientY, items });
-}
+        ];
 
-// <-- ADDED MESSAGE CONTEXT HANDLER -->
-function handleMessageContextMenu(e) {
-    // CRITICAL FIX: Always prevent the default context menu
-    e.preventDefault(); 
+        setPromptContextMenu({ x: e.clientX, y: e.clientY, items });
+    }
 
-    // This targets the text that the user might have selected in the message content
-    const selectedText = window.getSelection().toString();
-    const hasSelection = selectedText.length > 0;
-    
-    const items = [
-        {
-            label: 'Copy Selected Text',
-            icon: '📋',
-            disabled: !hasSelection,
-            onClick: () => {
-                // Rely on the browser's native copy command for selected text
-                document.execCommand('copy');
+    // <-- ADDED MESSAGE CONTEXT HANDLER -->
+    function handleMessageContextMenu(e) {
+        // CRITICAL FIX: Always prevent the default context menu
+        e.preventDefault();
+
+        // This targets the text that the user might have selected in the message content
+        const selectedText = window.getSelection().toString();
+        const hasSelection = selectedText.length > 0;
+
+        const items = [
+            {
+                label: 'Copy Selected Text',
+                icon: '📋',
+                disabled: !hasSelection,
+                onClick: () => {
+                    // Rely on the browser's native copy command for selected text
+                    document.execCommand('copy');
+                }
             }
-        }
-    ];
-    
-    setPromptContextMenu({ x: e.clientX, y: e.clientY, items });
-}
-// <-- END MESSAGE CONTEXT HANDLER -->
+        ];
+
+        setPromptContextMenu({ x: e.clientX, y: e.clientY, items });
+    }
+    // <-- END MESSAGE CONTEXT HANDLER -->
 
 
     async function processAiTurn(userPrompt, history) {
@@ -404,12 +407,41 @@ function handleMessageContextMenu(e) {
         if (projectKnowledge && Object.keys(projectKnowledge).length > 0) {
             knowledgeContext = JSON.stringify(projectKnowledge, null, 2);
         }
-        
+
         // 🌟 NEW: Serialize global knowledge for AI context
         let globalKnowledgeContext = "";
         if (globalKnowledge && Object.keys(globalKnowledge).length > 0) {
             globalKnowledgeContext = JSON.stringify(globalKnowledge, null, 2);
         }
+
+        // Phase 16: Determine if search should be enabled based on mode
+        let enableSearch = false;
+        if (searchMode === 'always') {
+            enableSearch = true;
+            console.log('[Search Mode] Always on - search enabled');
+        } else if (searchMode === 'auto') {
+            // Smart mode: Check RAG first, enable search only if knowledge gap
+            if (!window.aesop?.ingestion?.query) {
+                console.warn('[Auto Search Mode] RAG API not available, enabling search');
+                enableSearch = true;
+            } else {
+                try {
+                    const ragResults = await window.aesop.ingestion.query(userPrompt);
+                    // Enable search if RAG has < 3 relevant results
+                    enableSearch = !ragResults.ok || !ragResults.results || ragResults.results.length < 3;
+                    console.log(`[Auto Search Mode] RAG results: ${ragResults.results?.length || 0}, enabling search: ${enableSearch}`);
+                } catch (err) {
+                    console.warn('[Auto Search Mode] RAG query failed, enabling search as fallback:', err.message);
+                    enableSearch = true;
+                }
+            }
+        } else {
+            console.log('[Search Mode] Off - search disabled');
+        }
+        // If searchMode === 'off', enableSearch stays false
+
+
+
 
 
         // 1. Send to AI
@@ -420,7 +452,8 @@ function handleMessageContextMenu(e) {
             history: history,
             // NEW: Pass both knowledge contexts
             knowledgeContext: knowledgeContext,
-            globalKnowledgeContext: globalKnowledgeContext // 🌟 NEW PROP
+            globalKnowledgeContext: globalKnowledgeContext, // 🌟 NEW PROP
+            enableSearch: enableSearch // Phase 16: Computed from searchMode
         });
         const aiMessage = {
             role: "assistant",
@@ -557,7 +590,7 @@ function handleMessageContextMenu(e) {
         if (content.match(/```[\s\S]*?```/)) {
             return true;
         }
-        
+
         // FIX: Explicitly check for an executable JSON array, which is the true actionable content for plan execution.
         // This regex detects the start of a tool call array: [ { "tool": "..."
         // The /s flag allows '.' to match newlines.
@@ -699,6 +732,14 @@ function handleMessageContextMenu(e) {
             <div className="prompt-header">
                 <div className="prompt-header-left">
                     <span className="prompt-title">✨ AI Assistant</span>
+                    <label className="search-mode-selector" title="Live search mode">
+                        🔍
+                        <select value={searchMode} onChange={(e) => setSearchMode(e.target.value)}>
+                            <option value="off">Off</option>
+                            <option value="auto">Auto</option>
+                            <option value="always">Always</option>
+                        </select>
+                    </label>
                 </div>
                 <div
                     className="prompt-header-right">
@@ -712,7 +753,7 @@ function handleMessageContextMenu(e) {
             </div>
 
 
-            <div 
+            <div
                 className="prompt-messages scrollable"
                 ref={messagesContainerRef} // <-- ATTACHED REF
                 onContextMenu={handleMessageContextMenu} // <-- ATTACHED HANDLER

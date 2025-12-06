@@ -1,5 +1,5 @@
 // ipcHandlers.js
-const { ipcMain, dialog, BrowserWindow } = require("electron"); 
+const { ipcMain, dialog, BrowserWindow } = require("electron");
 const path = require("path");
 const fs = require("fs").promises;
 const fsSync = require("fs");
@@ -11,7 +11,7 @@ const { nanoid } = require('nanoid/non-secure');
 
 
 // 検 PHASE 4 & 6 TABLE NAMES
-const GLOBAL_MEMORY_TABLE = "aesopide_global_memory"; 
+const GLOBAL_MEMORY_TABLE = "aesopide_global_memory";
 const DEVELOPER_LIBRARY_TABLE = "aesopide_developer_library"; // New table name for RAG chunks/embeddings
 
 // Track current project root (folder opened in the IDE)
@@ -109,21 +109,21 @@ function simpleTextChunker(content, chunkSize = 500) {
                 chunks.push(currentChunk.trim());
                 currentChunk = '';
             }
-            
+
             // Split the long line into chunks
             let remaining = trimmedLine;
             while (remaining.length > 0) {
                 chunks.push(remaining.substring(0, chunkSize));
                 remaining = remaining.substring(chunkSize);
             }
-        } 
+        }
         // If adding this line exceeds chunk size, push current and start new
         else if ((currentChunk.length + trimmedLine.length + 1) > chunkSize) {
             if (currentChunk.length > 0) {
                 chunks.push(currentChunk.trim());
             }
             currentChunk = trimmedLine;
-        } 
+        }
         // Otherwise append to current
         else {
             currentChunk += (currentChunk.length > 0 ? ' ' : '') + trimmedLine;
@@ -375,23 +375,23 @@ function registerIpcHandlers() {
             return { ok: false, error: err.message || String(err) };
         }
     });
-    
+
     // ---------------------------------------------------------------------------
     // GLOBAL MEMORY (Cross-Project via Supabase)
     // ---------------------------------------------------------------------------
-    const GLOBAL_MEMORY_TABLE = "aesopide_global_memory"; 
+    const GLOBAL_MEMORY_TABLE = "aesopide_global_memory";
 
     ipcMain.handle("globalMemory:save", async (event, knowledge) => {
         try {
             const supabase = getSupabaseClient();
-            
+
             // Use a fixed key (e.g., 'developer_insights') to store global memory for the user
-            const fixedKey = 'global_developer_insights'; 
-            
+            const fixedKey = 'global_developer_insights';
+
             // 検 CRITICAL FIX: Use simplified table name
             const { error } = await supabase
-                .from(GLOBAL_MEMORY_TABLE) 
-                .upsert({ key: fixedKey, data: knowledge }, { onConflict: 'key' }); 
+                .from(GLOBAL_MEMORY_TABLE)
+                .upsert({ key: fixedKey, data: knowledge }, { onConflict: 'key' });
 
             if (error) throw error;
 
@@ -405,18 +405,18 @@ function registerIpcHandlers() {
     ipcMain.handle("globalMemory:load", async () => {
         try {
             const supabase = getSupabaseClient();
-            const fixedKey = 'global_developer_insights'; 
+            const fixedKey = 'global_developer_insights';
 
             // 検 CRITICAL FIX: Use simplified table name
             const { data, error } = await supabase
                 .from(GLOBAL_MEMORY_TABLE)
                 .select('data')
                 .eq('key', fixedKey)
-                .single(); 
+                .single();
 
             // If no row is found (error code PGRST116), return empty knowledge.
-            if (error && error.code === 'PGRST116') { 
-                return { ok: true, knowledge: {} }; 
+            if (error && error.code === 'PGRST116') {
+                return { ok: true, knowledge: {} };
             }
             if (error) {
                 throw error;
@@ -442,7 +442,7 @@ function registerIpcHandlers() {
             }
             const contentType = response.headers.get('content-type');
             const content = await response.text();
-            
+
             return { ok: true, content, contentType };
         } catch (err) {
             console.error("[AesopIDE ingestion:fetchUrl error]", err);
@@ -452,13 +452,13 @@ function registerIpcHandlers() {
     // ---------------------------------------------------------------------------
     // 検 PHASE 6: DOCUMENT INGESTION SERVICE (RAG BACKEND)
     // ---------------------------------------------------------------------------
-    const DEVELOPER_LIBRARY_TABLE = "aesopide_developer_library"; 
+    const DEVELOPER_LIBRARY_TABLE = "aesopide_developer_library";
 
     ipcMain.handle("ingestion:document", async (event, { content, source }) => {
         if (!content || typeof content !== 'string') {
-             return { ok: false, error: "Ingestion requires 'content' (document text)." };
+            return { ok: false, error: "Ingestion requires 'content' (document text)." };
         }
-        
+
         const sourceUrl = source || 'local_document';
 
         try {
@@ -466,7 +466,7 @@ function registerIpcHandlers() {
             const supabase = getSupabaseClient();
             const embedder = getEmbeddingModel();
             const embeddingsToInsert = [];
-            
+
             let successfulChunks = 0;
 
             for (const chunk of chunks) {
@@ -491,17 +491,17 @@ function registerIpcHandlers() {
             // 2. Store Vectors in Supabase (Use simple lowercase name)
             if (embeddingsToInsert.length > 0) {
                 const { error } = await supabase
-                    .from(DEVELOPER_LIBRARY_TABLE) 
+                    .from(DEVELOPER_LIBRARY_TABLE)
                     .insert(embeddingsToInsert);
-                
+
                 if (error) throw error;
                 successfulChunks = embeddingsToInsert.length;
             }
 
             // Return a status indicating readiness for the next stage (Tool Framework/Frontend)
-            return { 
-                ok: true, 
-                message: `Successfully processed and stored ${successfulChunks} document chunks from source: ${sourceUrl}.` 
+            return {
+                ok: true,
+                message: `Successfully processed and stored ${successfulChunks} document chunks from source: ${sourceUrl}.`
             };
         } catch (err) {
             console.error("[AesopIDE ingestion:document error]", err);
@@ -509,46 +509,46 @@ function registerIpcHandlers() {
         }
     });
 
-// ---------------------------------------------------------------------------
-// 検 PHASE 6.2: DEVELOPER LIBRARY QUERY (RAG RETRIEVAL)
-// ---------------------------------------------------------------------------
-ipcMain.handle("developerLibrary:query", async (event, { question }) => {
-    if (!question || typeof question !== 'string') {
-        return { ok: false, error: "Query requires a 'question' string." };
-    }
-
-    try {
-        // 1. Generate embedding for the user's question
-        const embedder = getEmbeddingModel();
-        const embeddingResponse = await embedder.embedContent(question);
-        const queryVector = embeddingResponse.embedding.values;
-
-        if (!queryVector || queryVector.length !== 768) {
-            throw new Error(`Invalid embedding vector size: ${queryVector?.length}`);
+    // ---------------------------------------------------------------------------
+    // 検 PHASE 6.2: DEVELOPER LIBRARY QUERY (RAG RETRIEVAL)
+    // ---------------------------------------------------------------------------
+    ipcMain.handle("developerLibrary:query", async (event, { question }) => {
+        if (!question || typeof question !== 'string') {
+            return { ok: false, error: "Query requires a 'question' string." };
         }
 
-        // 2. Query Supabase for similar documents using vector similarity
-        const supabase = getSupabaseClient();
-        // Call the custom PostgreSQL RPC function (needs to be created in the DB)
-        const { data, error } = await supabase.rpc('match_developer_library', {
-            query_embedding: queryVector,
-            match_threshold: 0.5,
-            match_count: 5
-        });
+        try {
+            // 1. Generate embedding for the user's question
+            const embedder = getEmbeddingModel();
+            const embeddingResponse = await embedder.embedContent(question);
+            const queryVector = embeddingResponse.embedding.values;
 
-        if (error) throw error;
+            if (!queryVector || queryVector.length !== 768) {
+                throw new Error(`Invalid embedding vector size: ${queryVector?.length}`);
+            }
 
-        return {
-            ok: true,
-            results: data || [],
-            message: `Found ${(data || []).length} relevant knowledge chunks.`
-        };
-    } catch (err) {
-        console.error("[developerLibrary:query error]", err);
-        return { ok: false, error: err.message || String(err) };
-    }
-});
-// End of new handler insertion
+            // 2. Query Supabase for similar documents using vector similarity
+            const supabase = getSupabaseClient();
+            // Call the custom PostgreSQL RPC function (needs to be created in the DB)
+            const { data, error } = await supabase.rpc('match_developer_library', {
+                query_embedding: queryVector,
+                match_threshold: 0.5,
+                match_count: 5
+            });
+
+            if (error) throw error;
+
+            return {
+                ok: true,
+                results: data || [],
+                message: `Found ${(data || []).length} relevant knowledge chunks.`
+            };
+        } catch (err) {
+            console.error("[developerLibrary:query error]", err);
+            return { ok: false, error: err.message || String(err) };
+        }
+    });
+    // End of new handler insertion
 
 
     // ---------------------------------------------------------------------------
@@ -566,6 +566,7 @@ ipcMain.handle("developerLibrary:query", async (event, { question }) => {
             let history = [];
             let knowledgeContext = ""; // Project knowledge
             let globalKnowledgeContext = ""; // Global knowledge
+            let enableSearch = false; // Phase 16: Google Search Grounding
 
             if (typeof payloadOrText === "string" || payloadOrText instanceof String) {
                 userPrompt = payloadOrText;
@@ -576,6 +577,7 @@ ipcMain.handle("developerLibrary:query", async (event, { question }) => {
                     history = maybeOptions.history || [];
                     knowledgeContext = maybeOptions.knowledgeContext || "";
                     globalKnowledgeContext = maybeOptions.globalKnowledgeContext || "";
+                    enableSearch = maybeOptions.enableSearch || false;
                 }
             } else if (payloadOrText && typeof payloadOrText === "object") {
                 userPrompt = payloadOrText.prompt || "";
@@ -585,6 +587,7 @@ ipcMain.handle("developerLibrary:query", async (event, { question }) => {
                 history = payloadOrText.history || [];
                 knowledgeContext = payloadOrText.knowledgeContext || "";
                 globalKnowledgeContext = payloadOrText.globalKnowledgeContext || "";
+                enableSearch = payloadOrText.enableSearch || false;
             }
 
             const parts = [];
@@ -595,7 +598,7 @@ ipcMain.handle("developerLibrary:query", async (event, { question }) => {
             if (globalKnowledgeContext) {
                 parts.push({ text: `## GLOBAL INSIGHTS (Cross-Project Developer Knowledge)\n${globalKnowledgeContext}\n\n` });
             }
-            if (knowledgeContext) { 
+            if (knowledgeContext) {
                 parts.push({ text: `## PROJECT KNOWLEDGE (Current Project Architecture)\n${knowledgeContext}\n\n` });
             }
             if (fileContext) {
@@ -623,11 +626,72 @@ ipcMain.handle("developerLibrary:query", async (event, { question }) => {
                 parts,
             });
 
-            const result = await model.generateContent({ contents });
+            // Phase 16: Configure tools with Google Search Grounding if enabled
+            const tools = [];
+            if (enableSearch) {
+                console.log('[Phase 16] Search enabled, configuring Google Search Grounding');
+                tools.push({
+                    googleSearchRetrieval: {
+                        dynamicRetrievalConfig: {
+                            mode: "MODE_DYNAMIC",
+                            dynamicThreshold: 0.3 // Only ground when confidence is low
+                        }
+                    }
+                });
+            } else {
+                console.log('[Phase 16] Search disabled, no grounding');
+            }
+
+            const requestConfig = { contents };
+            if (tools.length > 0) {
+                requestConfig.tools = tools;
+            }
+
+            const result = await model.generateContent(requestConfig);
             const response = result.response;
             const outText = typeof response.text === "function" ? response.text() : "";
 
-            return { ok: true, text: outText };
+            // Phase 16: Extract and auto-ingest grounded content
+            let groundingMetadata = null;
+            if (enableSearch && result.response.groundingMetadata) {
+                groundingMetadata = result.response.groundingMetadata;
+                console.log("[Phase 16] Grounding metadata received:", groundingMetadata);
+
+                // Auto-ingest grounded content into RAG
+                if (groundingMetadata.webSearchQueries && groundingMetadata.webSearchQueries.length > 0) {
+                    const supabase = getSupabaseClient();
+                    const embedder = getEmbeddingModel();
+
+                    for (const query of groundingMetadata.webSearchQueries) {
+                        try {
+                            // Prepare content summary from grounding
+                            const groundedContent = `Search Query: ${query}\n\nGrounded Response:\n${outText.substring(0, 1000)}`;
+
+                            // Generate embedding
+                            const embeddingResponse = await embedder.embedContent(groundedContent);
+                            const embedding = embeddingResponse.embedding.values;
+
+                            if (embedding && embedding.length === 768) {
+                                // Store in developer library
+                                await supabase.from(DEVELOPER_LIBRARY_TABLE).insert({
+                                    content: groundedContent,
+                                    source: `google_search:${query}`,
+                                    embedding: embedding
+                                });
+                                console.log(`[Phase 16] Auto-ingested grounding for query: ${query}`);
+                            }
+                        } catch (ingestErr) {
+                            console.warn("[Phase 16] Failed to ingest grounding:", ingestErr);
+                        }
+                    }
+                }
+            }
+
+            return {
+                ok: true,
+                text: outText,
+                groundingMetadata: groundingMetadata // Include metadata in response
+            };
         } catch (err) {
             console.error("[AesopIDE prompt:send error]", err);
             return { ok: false, text: err.message || String(err) };
@@ -890,7 +954,7 @@ ipcMain.handle("developerLibrary:query", async (event, { question }) => {
 
         async function searchDir(dir) {
             const entries = await fs.readdir(dir, { withFileTypes: true });
-                for (const entry of entries) {
+            for (const entry of entries) {
                 const fullPath = path.join(dir, entry.name);
                 const relPath = path.relative(root, fullPath).replace(/\\/g, "/");
 
