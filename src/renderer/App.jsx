@@ -47,9 +47,28 @@ export default function App() {
     // Layout state
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false);
-    const [sidebarWidth, setSidebarWidth] = useState(250);
-    const [bottomPanelHeight, setBottomPanelHeight] = useState(300); // Increased default height
-    const [isResizingBottom, setIsResizingBottom] = useState(false); // New state for resizing
+
+    // Widths and Heights - Initialize from localStorage
+    const [sidebarWidth, setSidebarWidth] = useState(
+        parseInt(localStorage.getItem('aesop_sidebarWidth')) || 250
+    );
+    const [rightSidebarWidth, setRightSidebarWidth] = useState(
+        parseInt(localStorage.getItem('aesop_rightSidebarWidth')) || 400
+    );
+    const [bottomPanelHeight, setBottomPanelHeight] = useState(
+        parseInt(localStorage.getItem('aesop_bottomPanelHeight')) || 300
+    );
+
+    // Persist layout changes
+    useEffect(() => {
+        localStorage.setItem('aesop_sidebarWidth', sidebarWidth);
+        localStorage.setItem('aesop_rightSidebarWidth', rightSidebarWidth);
+        localStorage.setItem('aesop_bottomPanelHeight', bottomPanelHeight);
+    }, [sidebarWidth, rightSidebarWidth, bottomPanelHeight]);
+
+    // Resizing Flags
+    // We can use a single state string: null, 'left', 'right', 'bottom'
+    const [resizingPanel, setResizingPanel] = useState(null);
 
     const [modal, setModal] = useState(null); // { title, message, onConfirm }
 
@@ -119,30 +138,89 @@ export default function App() {
             window.removeEventListener("mousemove", handleMouseMove);
             window.removeEventListener("mouseup", handleMouseUp);
         };
-    }, [activePath, tabs, isResizingBottom]);
+    }, [activePath, tabs, resizingPanel]); // Updated dependency
 
     // Resize Handlers
-    function handleMouseDown(e) {
-        e.preventDefault();
-        setIsResizingBottom(true);
-    }
+    function handleMouseDownLeft(e) { e.preventDefault(); setResizingPanel('left'); }
+    function handleMouseDownRight(e) { e.preventDefault(); setResizingPanel('right'); }
+    function handleMouseDownBottom(e) { e.preventDefault(); setResizingPanel('bottom'); }
 
     function handleMouseMove(e) {
-        if (!isResizingBottom) return;
-        const newHeight = window.innerHeight - e.clientY;
-        // Min height 100, Max height 80% of window
-        if (newHeight > 100 && newHeight < window.innerHeight * 0.8) {
-            setBottomPanelHeight(newHeight);
+        if (!resizingPanel) return;
+
+        if (resizingPanel === 'bottom') {
+            const newHeight = window.innerHeight - e.clientY;
+            if (newHeight > 50 && newHeight < window.innerHeight * 0.8) {
+                setBottomPanelHeight(newHeight);
+            }
+        } else if (resizingPanel === 'left') {
+            const newWidth = e.clientX;
+            if (newWidth > 150 && newWidth < 600) {
+                setSidebarWidth(newWidth);
+            }
+        } else if (resizingPanel === 'right') {
+            const newWidth = window.innerWidth - e.clientX;
+            if (newWidth > 300 && newWidth < 800) {
+                setRightSidebarWidth(newWidth);
+            }
         }
     }
 
     function handleMouseUp() {
-        setIsResizingBottom(false);
+        setResizingPanel(null);
     }
 
     function findTab(path) {
         return tabs.find((t) => t.path === path);
     }
+
+    // ... (rest of methods unchanged)
+
+    // ...
+    // ...
+
+    // Jump down to render return for sidebar updates
+
+    // ...
+
+    // (Inside render / return)
+    // Left Sidebar Update:
+    /*
+        <div
+            className={`app-sidebar ${sidebarCollapsed ? "collapsed" : ""}`}
+            style={{ width: sidebarCollapsed ? 0 : sidebarWidth }}
+        >
+            <FileTree rootPath={rootPath} onOpenFile={openFileNode} />
+            
+            {!sidebarCollapsed && (
+               <div 
+                   className="resize-handle-horizontal" 
+                   style={{ right: 0, cursor: 'col-resize' }}
+                   onMouseDown={handleMouseDownLeft}
+               />
+            )}
+        </div>
+    */
+
+    // ...
+
+    // Right Sidebar Update:
+    /*
+        <div 
+            className={`app-right-sidebar ${!promptOpen ? "collapsed" : ""}`}
+            style={{ width: !promptOpen ? 0 : rightSidebarWidth }} // Use state width
+        >
+            {promptOpen && (
+                 <div 
+                   className="resize-handle-horizontal" 
+                   style={{ left: 0, right: 'auto', cursor: 'col-resize' }}
+                   onMouseDown={handleMouseDownRight}
+               />
+            )}
+            
+            <PromptPanel ... />
+        </div>
+    */
 
     // Open a file from the file tree on the left
     async function openFileNode(node) {
@@ -596,13 +674,31 @@ export default function App() {
             />
 
             <div className="app-main">
+                {/* Left Sidebar */}
                 <div
                     className={`app-sidebar ${sidebarCollapsed ? "collapsed" : ""}`}
-                    style={{ width: sidebarCollapsed ? 0 : sidebarWidth }}
+                    style={{ width: sidebarCollapsed ? 0 : sidebarWidth, position: 'relative' }} // Add relative pos
                 >
                     <FileTree rootPath={rootPath} onOpenFile={openFileNode} />
+                    {!sidebarCollapsed && (
+                        <div
+                            className="resize-handle resize-handle-horizontal"
+                            style={{
+                                position: 'absolute',
+                                right: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: '5px',
+                                cursor: 'col-resize',
+                                zIndex: 10
+                            }}
+                            onMouseDown={handleMouseDownLeft}
+                            title="Drag to resize sidebar"
+                        />
+                    )}
                 </div>
 
+                {/* Main Editor Area */}
                 <div className="editor-area">
                     <EditorTabs
                         tabs={tabs}
@@ -627,14 +723,35 @@ export default function App() {
                         {/* Drag Handle */}
                         <div
                             className="resize-handle-top"
-                            onMouseDown={handleMouseDown}
+                            onMouseDown={handleMouseDownBottom} // Updated handler
                             title="Drag to resize"
                         />
                         <BottomPanel />
                     </div>
                 </div>
 
-                <div className={`app-right-sidebar ${!promptOpen ? "collapsed" : ""}`}>
+                {/* Right Sidebar (AI) */}
+                <div
+                    className={`app-right-sidebar ${!promptOpen ? "collapsed" : ""}`}
+                    style={{ width: !promptOpen ? 0 : rightSidebarWidth, position: 'relative' }}
+                >
+                    {promptOpen && (
+                        <div
+                            className="resize-handle resize-handle-horizontal"
+                            style={{
+                                position: 'absolute',
+                                left: 0,
+                                right: 'auto',
+                                top: 0,
+                                bottom: 0,
+                                width: '5px',
+                                cursor: 'col-resize',
+                                zIndex: 10
+                            }}
+                            onMouseDown={handleMouseDownRight}
+                            title="Drag to resize AI panel"
+                        />
+                    )}
                     <PromptPanel
                         onClose={() => {
                             setPromptOpen(false);
@@ -660,50 +777,58 @@ export default function App() {
                 message={statusMessage}
             />
 
-            {modal && (
-                <InputModal
-                    title={modal.title}
-                    message={modal.message}
-                    onConfirm={modal.onConfirm}
-                    onCancel={() => setModal(null)}
-                />
-            )}
+            {
+                modal && (
+                    <InputModal
+                        title={modal.title}
+                        message={modal.message}
+                        onConfirm={modal.onConfirm}
+                        onCancel={() => setModal(null)}
+                    />
+                )
+            }
 
             {/* PHASE 3.2: Render the Plan Review Modal */}
-            {planModalContent && (
-                <PlanReview
-                    rootPath={rootPath}
-                    onClose={() => setPlanModalContent(null)}
-                    onCancel={() => setPlanModalContent(null)}
-                    onExecute={handleExecutePlan} // 🌟 CRITICAL FIX: Prop name corrected to 'onExecute'
-                    initialPlanContent={planModalContent}
-                />
-            )}
+            {
+                planModalContent && (
+                    <PlanReview
+                        rootPath={rootPath}
+                        onClose={() => setPlanModalContent(null)}
+                        onCancel={() => setPlanModalContent(null)}
+                        onExecute={handleExecutePlan} // 🌟 CRITICAL FIX: Prop name corrected to 'onExecute'
+                        initialPlanContent={planModalContent}
+                    />
+                )
+            }
 
-            {ingestModalOpen && (
-                <IngestModal
-                    onClose={() => setIngestModalOpen(false)}
-                    onIngest={(result) => setStatusMessage(result.message || 'Document ingested')}
-                />
-            )}
+            {
+                ingestModalOpen && (
+                    <IngestModal
+                        onClose={() => setIngestModalOpen(false)}
+                        onIngest={(result) => setStatusMessage(result.message || 'Document ingested')}
+                    />
+                )
+            }
 
             {/* Phase 6.4: Agent Manager Panel */}
-            {showAgentManager && (
-                <AgentManager
-                    onClose={() => setShowAgentManager(false)}
-                    steps={agentSteps}
-                    currentStepIndex={currentStepIndex}
-                    isPaused={agentPaused}
-                    onPause={() => setAgentPaused(true)}
-                    onResume={() => setAgentPaused(false)}
-                    onCancel={() => {
-                        setAgentSteps([]);
-                        setCurrentStepIndex(-1);
-                        setAgentPaused(false);
-                        setStatusMessage("Agent execution cancelled");
-                    }}
-                />
-            )}
-        </div>
+            {
+                showAgentManager && (
+                    <AgentManager
+                        onClose={() => setShowAgentManager(false)}
+                        steps={agentSteps}
+                        currentStepIndex={currentStepIndex}
+                        isPaused={agentPaused}
+                        onPause={() => setAgentPaused(true)}
+                        onResume={() => setAgentPaused(false)}
+                        onCancel={() => {
+                            setAgentSteps([]);
+                            setCurrentStepIndex(-1);
+                            setAgentPaused(false);
+                            setStatusMessage("Agent execution cancelled");
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 }
