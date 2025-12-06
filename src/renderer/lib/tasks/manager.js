@@ -15,48 +15,51 @@ import { executeTool } from "../tools/framework";
 async function executeStep(toolName, params) {
     try {
         const result = await executeTool(toolName, params);
-        
+
         // Return a structured success object
         return { success: true, tool: toolName, result };
     } catch (error) {
         // Phase 3.3: Implement Rollback on Errors (Placeholder)
         console.error(`Execution step failed for tool ${toolName}. Triggering rollback...`, error);
-        
+
         // FIX: Throw a native Error instance with a structured message 
         // to ensure it propagates correctly through the async chain and IPC layer.
-        const errorDetails = { 
-            success: false, 
-            tool: toolName, 
-            message: error.message || String(error) 
+        const errorDetails = {
+            success: false,
+            tool: toolName,
+            message: error.message || String(error)
         };
         // Throw a new Error object containing the structured details
         throw new Error(JSON.stringify(errorDetails));
     }
 }
 
+import { agentQueue } from "./queue";
+
 /**
  * Implements the core Multi-Step Execution Engine.
- * Executes a sequence of tool calls sequentially, stopping on the first error.
+ * delegates to TaskQueue for async execution and state management.
  * @param {Array<{tool: string, params: Object}>} actionChain - Array of tool calls to execute.
  * @returns {Promise<Array<Object>>} Array of successful results for each step.
  */
 export async function executeChain(actionChain) {
-    const chainResults = [];
-    
-    for (const action of actionChain) {
-        console.log(`[Execution Engine] Running step: ${action.tool}`);
-        try {
-            const result = await executeStep(action.tool, action.params);
-            chainResults.push(result);
-            
-        } catch (stepError) {
-            // Re-throw the structured Error from executeStep
-            throw stepError;
-        }
-    }
-    
-    return chainResults;
+    console.log(`[Execution Engine] Queuing ${actionChain.length} steps`);
+
+    // Add all tasks to queue
+    agentQueue.clear(); // For now, clear existing (simple mode)
+    agentQueue.addAll(actionChain);
+
+    // Start execution
+    await agentQueue.start();
+
+    // Return history as results (this waits for the queue to finish or pause)
+    // Note: In async mode, this might return immediately if we don't await properly,
+    // but agentQueue.start() awaits processQueue(), so it should block until done/paused.
+    return agentQueue.history;
 }
+
+// Re-export queue for direct access if needed
+export { agentQueue };
 
 // ---------------------------------------------------
 // PHASE 3.1 & 3.2: TASK & PLAN FILE MANAGEMENT (Your Existing Logic + Fix)

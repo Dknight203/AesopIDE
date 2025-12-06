@@ -786,7 +786,7 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    rows={3}
+                    rows={2}
                 />
                 <button
                     className="prompt-send-btn"

@@ -1,26 +1,52 @@
 // src/renderer/components/AgentManager.jsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { agentQueue } from '../lib/tasks/queue';
 import '../styles/agentmanager.css';
 
-export default function AgentManager({
-  onClose,
-  steps = [],
-  currentStepIndex = -1,
-  isPaused = false,
-  onPause,
-  onResume,
-  onCancel
-}) {
-  // Determine execution status
-  const isExecuting = currentStepIndex >= 0 && currentStepIndex < steps.length;
-  const isComplete = currentStepIndex >= steps.length && steps.length > 0;
-  const hasSteps = steps.length > 0;
+export default function AgentManager({ onClose }) {
+  // Subscribe to queue state
+  const [state, setState] = useState(agentQueue.getState());
+
+  useEffect(() => {
+    // Initial sync
+    setState(agentQueue.getState());
+
+    // Subscribe to updates
+    const unsubscribe = agentQueue.subscribe((newState) => {
+      setState(newState);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const { queue, history, status, currentTask } = state;
+  const isPaused = status === 'paused';
+  const isExecuting = status === 'running' || status === 'paused';
+
+  // Combine all steps for display: History + Current + Queue
+  const allSteps = [
+    ...history,
+    ...(currentTask ? [currentTask] : []),
+    ...queue
+  ];
+
+  const hasSteps = allSteps.length > 0;
+  const currentIndex = history.length;
+  const isComplete = queue.length === 0 && !currentTask && history.length > 0;
+
+  // Handlers
+  const handlePause = () => agentQueue.pause();
+  const handleResume = () => agentQueue.start();
+  const handleCancel = () => {
+    agentQueue.clear();
+    onClose(); // Close panel on cancel
+  };
 
   return (
     <div className="agent-manager-overlay" onClick={onClose}>
       <div className="agent-manager-panel" onClick={(e) => e.stopPropagation()}>
         <div className="agent-manager-header">
-          <h2>🤖 Agent Manager</h2>
+          <h2>🤖 Agent Manager {isPaused && "(Paused)"}</h2>
           <button className="close-btn" onClick={onClose} title="Close">
             ✕
           </button>
@@ -44,14 +70,14 @@ export default function AgentManager({
                   <div className="status-indicator running">
                     <span className="status-icon">⚡</span>
                     <span className="status-text">
-                      Executing step {currentStepIndex + 1} of {steps.length}
+                      Executing step {currentIndex + 1} of {allSteps.length}
                     </span>
                   </div>
                 )}
-                {isExecuting && isPaused && (
+                {isPaused && (
                   <div className="status-indicator paused">
                     <span className="status-icon">⏸️</span>
-                    <span className="status-text">Paused at step {currentStepIndex + 1}</span>
+                    <span className="status-text">Paused at step {currentIndex + 1}</span>
                   </div>
                 )}
                 {isComplete && (
@@ -64,31 +90,42 @@ export default function AgentManager({
 
               {/* Step List */}
               <div className="steps-list">
-                {steps.map((step, index) => {
-                  const isPast = index < currentStepIndex;
-                  const isCurrent = index === currentStepIndex;
-                  const isFuture = index > currentStepIndex;
+                {allSteps.map((step, index) => {
+                  const isPast = index < currentIndex;
+                  const isCurrent = index === currentIndex && !isComplete;
+                  const isFuture = index > currentIndex;
+
+                  // Status based on step object if available, otherwise inferred from index
+                  const stepStatus = step.status || (isPast ? 'completed' : isCurrent ? 'running' : 'pending');
 
                   return (
                     <div
-                      key={index}
-                      className={`step-item ${isPast ? 'completed' : isCurrent ? 'active' : 'pending'
-                        }`}
+                      key={step.id || index}
+                      className={`step-item ${stepStatus}`}
                     >
                       <div className="step-indicator">
-                        {isPast && <span className="step-icon">✓</span>}
-                        {isCurrent && <span className="step-icon current">⚡</span>}
-                        {isFuture && <span className="step-number">{index + 1}</span>}
+                        {stepStatus === 'completed' && <span className="step-icon">✓</span>}
+                        {stepStatus === 'running' && <span className="step-icon current">⚡</span>}
+                        {stepStatus === 'failed' && <span className="step-icon error">✕</span>}
+                        {(stepStatus === 'pending' || isFuture) && <span className="step-number">{index + 1}</span>}
                       </div>
                       <div className="step-content">
                         <div className="step-title">
                           {step.tool || `Step ${index + 1}`}
+                          <span style={{ opacity: 0.5, fontSize: '0.8em', marginLeft: '10px' }}>
+                            {stepStatus}
+                          </span>
                         </div>
                         {step.params && (
                           <div className="step-params">
                             {Object.keys(step.params).length > 0
-                              ? `Params: ${JSON.stringify(step.params).substring(0, 100)}...`
+                              ? `Params: ${JSON.stringify(step.params).substring(0, 80)}...`
                               : 'No parameters'}
+                          </div>
+                        )}
+                        {step.error && (
+                          <div className="step-error" style={{ color: '#ff6b6b', fontSize: '0.85em', marginTop: '4px' }}>
+                            Error: {step.error}
                           </div>
                         )}
                       </div>
@@ -100,23 +137,23 @@ export default function AgentManager({
               {/* Control Buttons */}
               <div className="agent-controls">
                 {isExecuting && !isPaused && (
-                  <button className="control-btn pause-btn" onClick={onPause}>
+                  <button className="control-btn pause-btn" onClick={handlePause}>
                     ⏸️ Pause
                   </button>
                 )}
-                {isExecuting && isPaused && (
-                  <button className="control-btn resume-btn" onClick={onResume}>
+                {isPaused && (
+                  <button className="control-btn resume-btn" onClick={handleResume}>
                     ▶️ Resume
                   </button>
                 )}
-                {isExecuting && (
-                  <button className="control-btn cancel-btn" onClick={onCancel}>
+                {(isExecuting || isPaused) && (
+                  <button className="control-btn cancel-btn" onClick={handleCancel}>
                     ⏹️ Cancel
                   </button>
                 )}
                 {isComplete && (
-                  <button className="control-btn" onClick={onCancel}>
-                    Clear
+                  <button className="control-btn" onClick={handleCancel}>
+                    Clear & Close
                   </button>
                 )}
               </div>
