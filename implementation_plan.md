@@ -12,77 +12,153 @@
 - ✅ Phase 4.2: Project & Global Memory
 - ✅ Phase 5.1-5.3: Git Diff/Patch, Testing, Linting
 - ✅ Phase 6.1-6.2: **RAG Infrastructure** (Document Ingestion & Developer Library Query)
+- ✅ Phase 6.4: Agent Orchestration UI (`AgentManager.jsx` with task queue)
+- ✅ Phase 6.5: Rich Artifacts (`Mermaid.jsx`, markdown rendering)
+- ✅ Phase 7: Asynchronous Task Management (`TaskQueue` with priorities, dependencies)
 
-**Active Phase:**
-- 🔨 Phase 6.4: Agent Orchestration UI (in progress)
+**Pending Phases (Planned Enhancements):**
+- � Phase 7.5: Electron Best Practices (ErrorBoundary, IPC Schema, Workspace State)
+- 📋 Phase 8: Monaco Editor + VSCode Task Runner + Terminal Bridge
+- 📋 Phase 9: Automated Plan Execution
+- 📋 Phase 10: Supabase/Cloud Context Ingestion
+- 📋 Phase 11: Architectural Guardrails
+- 📋 Phase 12: Visual QA/UX Testing
+- 📋 Phase 13: Artifact Generation & Display
+- 📋 Phase 14: Autonomous Test Integration
+- 📋 Phase 16: Live Web Search & Auto-Ingestion
+- 📋 Phase 17: Extension System + MCP + Checkpoints
 
 ---
 
-## Phase 6.4: Agent Orchestration UI (Current)
+## Phase 7.5: Electron Best Practices (Pending)
+**Status:** 📋 Planned - Not yet implemented
 
 ### Overview
-Create the visual interface for multi-step task execution with user controls.
+Apply production-ready patterns from electron-react-boilerplate for stability and maintainability.
 
 ### Proposed Changes
+
+#### [NEW] [src/renderer/components/ErrorBoundary.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/ErrorBoundary.jsx)
+React error boundary for crash protection:
+- Catch and display React errors gracefully
+- Log errors to console and file
+- Provide reload button for recovery
+- Prevent full IDE crashes from component errors
+
+```javascript
+export default class ErrorBoundary extends React.Component {
+    state = { hasError: false, error: null };
+    
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+    
+    componentDidCatch(error, errorInfo) {
+        console.error('React Error:', error, errorInfo);
+        window.aesop.logger?.error('Renderer crash', { error, errorInfo });
+    }
+    
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="error-boundary">
+                    <h1>🚨 Something went wrong</h1>
+                    <pre>{this.state.error?.toString()}</pre>
+                    <button onClick={() => window.location.reload()}>
+                        Reload IDE
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+```
+
+#### [MODIFY] [src/renderer/index.jsx](file:///c:/DevApps/AesopIDE/src/renderer/index.jsx)
+Wrap App with ErrorBoundary:
+```javascript
+import ErrorBoundary from './components/ErrorBoundary';
+
+root.render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
+```
+
+#### [NEW] [preload/ipcSchema.js](file:///c:/DevApps/AesopIDE/preload/ipcSchema.js)
+IPC channel validation schema:
+- Define all IPC channels in one place
+- Prevent typos in channel names
+- Document IPC API surface
+- Enable type-safe IPC calls
+
+```javascript
+export const IPC_CHANNELS = {
+  FS_READ: 'fs:read',
+  FS_WRITE: 'fs:write',
+  PROMPT_SEND: 'prompt:send',
+  RAG_QUERY: 'rag:query',
+  TERMINAL_EXEC: 'terminal:exec',
+  GIT_STATUS: 'git:status'
+};
+
+export function validateChannel(channel) {
+  if (!Object.values(IPC_CHANNELS).includes(channel)) {
+    throw new Error(`Invalid IPC channel: ${channel}`);
+  }
+}
+```
+
+#### [NEW] [src/renderer/lib/workspace/state.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/workspace/state.js)
+Workspace state persistence (inspired by VSCode memento):
+- Save/restore open tabs across sessions
+- Persist panel sizes and layout
+- Remember scroll positions
+- Store expanded folder states
+
+```javascript
+export class WorkspaceState {
+    constructor(projectPath) {
+        this.stateFile = `${projectPath}/.aesop/workspace.json`;
+    }
+
+    async save(state) {
+        await window.aesop.fs.writeFile(
+            this.stateFile,
+            JSON.stringify(state, null, 2)
+        );
+    }
+
+    async load() {
+        try {
+            const content = await window.aesop.fs.readFile(this.stateFile);
+            return JSON.parse(content);
+        } catch {
+            return {
+                openTabs: [],
+                activeTab: null,
+                sidebarWidth: 250,
+                terminalHeight: 200
+            };
+        }
+    }
+}
+```
 
 #### [MODIFY] [src/renderer/App.jsx](file:///c:/DevApps/AesopIDE/src/renderer/App.jsx)
-- Add `showAgentManager` state variable
-- Conditionally render `AgentManager` component
-- Pass state setter to TopBar for panel toggle
-
-#### [MODIFY] [src/renderer/components/TopBar.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/TopBar.jsx)
-- Add "🤖 Agent" button to toggle AgentManager panel
-- Receive `setShowAgentManager` prop from App
-
-#### [MODIFY] [src/renderer/components/AgentManager.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/AgentManager.jsx)
-- Design step execution display (ordered list showing step status)
-- Add pause/resume/cancel control buttons
-- Display current step, completed steps, and pending steps
-- Show real-time execution status
-
-#### [MODIFY] [src/renderer/lib/ai/systemPrompt.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/systemPrompt.js)
-- Add planning mode instructions for multi-step workflows
-- Document step-by-step execution format
-- Add instructions for progress reporting
+Integrate workspace state persistence:
+- Load workspace state on mount
+- Auto-save state every 5 seconds
+- Restore tabs, layout, and scroll positions
 
 ### Verification Plan
 
 #### Manual Verification
-1. Run `npm run dev` to start AesopIDE
-2. Click the "🤖 Agent" button in TopBar
-3. Verify AgentManager panel appears
-4. Confirm placeholder UI elements are visible
-5. Test pause/resume buttons (UI only for now)
-
----
-
-## Phase 6.5: Rich Artifacts (Pending)
-
-### Overview
-Enhance the rendering of AI plans and chat outputs with rich media, diagrams, and improved formatting.
-
-### Proposed Changes
-
-#### [MODIFY] [package.json](file:///c:/DevApps/AesopIDE/package.json)
-- Add `mermaid` dependency for diagram rendering
-
-#### [MODIFY] [src/renderer/components/PlanReview.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PlanReview.jsx)
-- Implement Mermaid diagram rendering for visual plan representation
-- Add support for rendering complex markdown tables and formatting
-
-#### [MODIFY] [src/renderer/components/PromptPanel.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PromptPanel.jsx)
-- Enhance chat message rendering to support rich markdown features (tables, alerts, etc.)
-
-#### [NEW] [src/renderer/styles/markdown.css](file:///c:/DevApps/AesopIDE/src/renderer/styles/markdown.css)
-- Add dedicated styles for rich markdown elements (tables, blockquotes, mermaid diagrams)
-
-### Verification Plan
-
-#### Manual Verification
-1. Create a plan that includes a Mermaid diagram code block.
-2. Verify it renders as a visual diagram in PlanReview.
-3. Send a chat message with a markdown table.
-4. Verify it is styled correctly in PromptPanel.
+1. **Error Boundary**: Throw test error in component, verify boundary catches it
+2. **Workspace State**: Open files, resize panels, close IDE, reopen - verify state restored
+3. **IPC Schema**: Check console for validation errors on startup
 
 ---
 
@@ -149,63 +225,208 @@ Update UI to show multiple concurrent tasks:
 
 ---
 
-## Phase 8: Intelligent Tool Execution Layer
+## Phase 8: Intelligent Tool Execution Layer (Pending)
+**Status:** 📋 Planned - Not yet implemented
 **byLLM Integration:** ✅ Retrieves error resolution strategies from developer library
 
 ### Overview
-Enable AI agent to programmatically control the terminal, analyze outputs, and self-correct errors (inspired by Cline's terminal integration).
+Upgrade editor to Monaco (VSCode's editor), implement VSCode-style task runner for terminal commands, and enable AI self-correction loops.
+
+### User Review Required
+
+> [!IMPORTANT]
+> Monaco Editor replaces the current textarea. This is a **non-breaking change** - same props interface, but adds professional IDE features (syntax highlighting, IntelliSense, diff viewer).
 
 ### Proposed Changes
 
-#### [MODIFY] [src/renderer/components/Terminal.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/Terminal.jsx)
-Add programmatic command execution:
-- Accept commands from `toolParser.js` via props/events
-- Stream stdout/stderr to AI context in real-time
-- Parse exit codes and error patterns
-- Expose command execution API to AI agent
+#### [MODIFY] [package.json](file:///c:/DevApps/AesopIDE/package.json)
+Add Monaco Editor dependency:
+```json
+{
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0"
+  }
+}
+```
+
+#### [MODIFY] [src/renderer/components/Editor.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/Editor.jsx)
+Replace textarea with Monaco Editor:
+- Import `@monaco-editor/react`
+- Detect language from file extension (js, ts, py, json, etc.)
+- Enable syntax highlighting and IntelliSense
+- Add custom keybindings (Ctrl+S for save)
+- Support `automaticLayout: true` for panel resizing
+- Preserve existing copy/paste functionality (enhanced by Monaco)
+
+**Key Features:**
+- Multi-cursor editing
+- Built-in diff viewer (for Phase 5 git integration)
+- Inline error markers (for terminal feedback)
+- Minimap navigation
+- Find/replace with regex
+
+**Implementation:**
+```javascript
+import MonacoEditor from "@monaco-editor/react";
+
+export default function Editor({ activeTab, onChangeContent, onSave }) {
+    const editorRef = useRef(null);
+
+    function handleEditorDidMount(editor, monaco) {
+        editorRef.current = editor;
+        
+        // Preserve Ctrl+S save
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+            onSave();
+        });
+
+        // Add AI context query action
+        editor.addAction({
+            id: 'aesop-ai-assist',
+            label: 'Ask AI About Selection',
+            keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyA],
+            run: (ed) => {
+                const selection = ed.getModel().getValueInRange(ed.getSelection());
+                window.aesop.events.emit('ai:contextQuery', { code: selection });
+            }
+        });
+    }
+
+    const getLanguage = (path) => {
+        const ext = path.split('.').pop();
+        const map = { 
+            js: 'javascript', jsx: 'javascript',
+            ts: 'typescript', tsx: 'typescript',
+            py: 'python', json: 'json', md: 'markdown',
+            css: 'css', html: 'html', sql: 'sql'
+        };
+        return map[ext] || 'plaintext';
+    };
+
+    return (
+        <MonacoEditor
+            height="100%"
+            language={getLanguage(activeTab.path)}
+            value={activeTab.content || ""}
+            onChange={onChangeContent}
+            theme="vs-dark"
+            options={{
+                minimap: { enabled: true },
+                fontSize: 14,
+                automaticLayout: true,  // Responds to panel resize!
+                tabSize: 2
+            }}
+            onMount={handleEditorDidMount}
+        />
+    );
+}
+```
+
+#### [NEW] [src/renderer/lib/terminal/taskRunner.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/terminal/taskRunner.js)
+VSCode-style task runner for structured command execution:
+- Auto-discover npm scripts from package.json
+- Define problem matchers for TypeScript, ESLint, Jest errors
+- Execute tasks with structured error parsing
+- Return parsed errors to AI for self-correction
+
+**Implementation:**
+```javascript
+export class TaskRunner {
+    constructor() {
+        this.tasks = new Map();
+    }
+
+    registerTask(name, config) {
+        this.tasks.set(name, {
+            command: config.command,
+            cwd: config.cwd,
+            problemMatcher: config.problemMatcher // Regex for error parsing
+        });
+    }
+
+    async discoverScripts(projectPath) {
+        const pkg = JSON.parse(await window.aesop.fs.readFile(`${projectPath}/package.json`));
+        
+        for (const [name, script] of Object.entries(pkg.scripts || {})) {
+            this.registerTask(`npm:${name}`, {
+                command: `npm run ${name}`,
+                cwd: projectPath,
+                problemMatcher: this.detectProblemMatcher(script)
+            });
+        }
+    }
+
+    detectProblemMatcher(script) {
+        if (script.includes('tsc')) return /error TS(\d+): (.+)/;
+        if (script.includes('eslint')) return /(\d+):(\d+)\s+error\s+(.+)/;
+        if (script.includes('jest')) return /● (.+)/;
+        return null;
+    }
+
+    async executeTask(name) {
+        const task = this.tasks.get(name);
+        const result = await window.aesop.terminal.exec(task.command, { cwd: task.cwd });
+        
+        // Parse errors using problem matcher
+        if (task.problemMatcher && result.stderr) {
+            const matches = result.stderr.match(task.problemMatcher);
+            if (matches) {
+                return { ...result, parsedErrors: matches };
+            }
+        }
+        
+        return result;
+    }
+}
+```
 
 #### [NEW] [src/renderer/lib/tools/terminalBridge.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tools/terminalBridge.js)
 Command result parser and feedback loop:
-- Detect compilation errors (TypeScript, ESLint output patterns)
-- Identify test failures (Jest/Vitest error formats)
-- Parse stack traces for actionable errors
+- Use TaskRunner for structured execution
+- Parse compilation errors (TypeScript, ESLint)
+- Identify test failures (Jest/Vitest)
 - Return structured error objects to AI
 
 #### [MODIFY] [src/renderer/lib/ai/toolParser.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/toolParser.js)
 Extend to handle terminal commands:
 - Add `executeTerminalCommand` tool
-- Implement command validation (no destructive commands without approval)
-- Add retry logic with exponential backoff (max 3 retries)
-- Create execution logs for debugging
+- Use TaskRunner for execution
+- Implement command validation
+- Add retry logic with exponential backoff
 
 #### [NEW] [src/renderer/lib/ai/selfCorrection.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/selfCorrection.js)
 Self-correction loop implementation:
-- Analyze command output for errors
-- **Query RAG**: Retrieve debugging strategies for specific error types
-- Generate fix attempts based on error analysis
-- Re-execute command after applying fixes
-- Escalate to user after max retries exceeded
+- Analyze parsed errors from TaskRunner
+- **Query RAG**: Retrieve debugging strategies
+- Generate fix attempts
+- Re-execute via TaskRunner
+- Escalate to user after max retries
 
 ### Verification Plan
 
-#### Automated Tests
-- Create: `src/renderer/lib/tools/__tests__/terminalBridge.test.js`
-- Test error pattern matching (compile errors, test failures)
-- Validate retry logic with mock commands
-- Run: `npm test -- terminalBridge.test.js`
+#### Manual Verification (Monaco Editor)
+1. Run `npm install @monaco-editor/react`
+2. Run `npm run dev`
+3. Open a TypeScript file - verify syntax highlighting works
+4. Test Ctrl+C/V/X - verify copy/paste works
+5. Resize panels - verify editor auto-adjusts (no breaking)
+6. Test Ctrl+S - verify save still works
 
-#### Manual Verification
-1. Ask AI to "run npm install and fix any errors"
-2. Introduce deliberate error (remove a package from package.json but leave it in imports)
-3. Run the AI command and verify it:
-   - Detects the missing package error
-   - Automatically runs `npm install <package>`
-   - Confirms successful installation
-4. Check terminal logs show full execution sequence
+#### Manual Verification (Task Runner)
+1. Ask AI: "What npm scripts are available?"
+2. Verify AI lists discovered tasks
+3. Introduce TypeScript error in a file
+4. Ask AI: "Run npm run build and fix errors"
+5. Verify AI:
+   - Executes build task
+   - Parses TypeScript error
+   - Suggests or applies fix
+   - Re-runs build to confirm
 
 ---
 
-## Phase 9: Automated Plan Execution
+## Phase 9: Automated Plan Execution (Pending)
+**Status:** 📋 Planned - Not yet implemented
 **byLLM Integration:** ✅ Queries git workflow best practices and commit conventions
 
 ### Overview
@@ -263,7 +484,8 @@ Add execution controls:
 
 ---
 
-## Phase 10: Supabase/Cloud Context Ingestion
+## Phase 10: Supabase/Cloud Context Ingestion (Pending)
+**Status:** 📋 Planned - Not yet implemented
 **byLLM Integration:** ✅✅ CORE FEATURE - Uses RAG infrastructure to ingest schemas
 
 ### Overview
@@ -333,7 +555,8 @@ UI for browsing ingested schemas:
 
 ---
 
-## Phase 11: Architectural Guardrails
+## Phase 11: Architectural Guardrails (Pending)
+**Status:** 📋 Planned - Not yet implemented
 **byLLM Integration:** ✅ Stores common architectural patterns in RAG
 
 ### Overview
@@ -406,7 +629,8 @@ Add rule validation before tool execution:
 
 ---
 
-## Phase 12: Visual QA/UX Testing
+## Phase 12: Visual QA/UX Testing (Pending)
+**Status:** 📋 Planned - Not yet implemented
 **byLLM Integration:** ✅ Queries testing best practices and common UI patterns
 
 ### Overview
@@ -473,7 +697,8 @@ Visual regression testing logic:
 
 ---
 
-## Phase 13: Artifact Generation & Display
+## Phase 13: Artifact Generation & Display (Pending)
+**Status:** 📋 Planned - Not yet implemented
 **byLLM Integration:** ❌ No direct integration (infrastructure feature)
 
 ### Overview
@@ -524,7 +749,8 @@ Styling for artifact displays:
 
 ---
 
-## Phase 14: Autonomous Test Integration
+## Phase 14: Autonomous Test Integration (Pending)
+**Status:** 📋 Planned - Not yet implemented
 **byLLM Integration:** ✅✅ Retrieves debugging patterns and test strategies from RAG
 
 ### Overview
@@ -589,7 +815,8 @@ Add test-specific self-correction:
 
 ---
 
-## Phase 16: Live Web Search & Auto-Ingestion
+## Phase 16: Live Web Search & Auto-Ingestion (Pending)
+**Status:** 📋 Planned - Not yet implemented
 **byLLM Integration:** ✅✅ CORE FEATURE - Ingests search results into RAG
 
 ### Overview
@@ -700,12 +927,40 @@ Add search toggle and grounding indicator:
 
 ---
 
-## Phase 17: Cline Architecture Integration
+## Phase 17: Cline Architecture Integration (Pending)
+**Status:** 📋 Planned - Not yet implemented
+**byLLM Integration:** ✅ Extensions can contribute RAG sources
 
 ### Overview
-Adopt proven patterns from Cline for MCP support, task checkpoints, and enhanced context management.
+ Adopt proven patterns from Cline and Theia for MCP support, task checkpoints, and enhanced context management using a clean extension architecture.
 
 ### Proposed Changes
+
+#### [NEW] [src/renderer/lib/extensions/extensionHost.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/extensions/extensionHost.js)
+Theia-inspired extension system for MCP servers and custom tools:
+- Register extensions with manifest-based configuration
+- Provide isolated extension contexts
+- Auto-activate based on events (e.g., project type detected)
+- Allow extensions to contribute tools, commands, and RAG sources
+
+#### [NEW] [extensions/dualpilot-tools/manifest.json](file:///c:/DevApps/AesopIDE/extensions/dualpilot-tools/manifest.json)
+Example extension manifest:
+```json
+{
+  "id": "dualpilot-tools",
+  "name": "DualPilot Integration",
+  "version": "1.0.0",
+  "activationEvents": ["onProject:dualpilot"],
+  "contributes": {
+    "tools": [
+      {
+        "name": "fetchDualPilotSites",
+        "description": "Fetch all sites from DualPilot Supabase"
+      }
+    ]
+  }
+}
+```
 
 #### [NEW] [src/renderer/lib/mcp/mcpClient.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/mcp/mcpClient.js)
 Model Context Protocol client implementation:
@@ -713,12 +968,7 @@ Model Context Protocol client implementation:
 - Discover available tools from servers
 - Execute server-provided tools
 - Handle streaming responses
-
-#### [NEW] [tool-servers/](file:///c:/DevApps/AesopIDE/tool-servers/)
-Custom MCP server templates:
-- `dualpilot-tools/`: DualPilot-specific tools (fetch sites, run scans)
-- `github-tools/`: GitHub API integration (issues, PRs)
-- `template/`: Boilerplate for AI-generated tool servers
+- **Integrate with Extension System**: MCP servers register as extensions
 
 #### [MODIFY] [src/renderer/lib/tasks/manager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tasks/manager.js)
 Add checkpoint system (inspired by Cline):
@@ -736,17 +986,24 @@ Add context shortcuts (Cline-style):
 
 ### Verification Plan
 
-#### Manual Verification
-1. Implement custom MCP server: "Create a tool that lists all DualPilot sites"
-2. Verify AI creates server in `tool-servers/dualpilot-tools/`
-3. Test tool registration in AesopIDE settings
+#### Manual Verification (Extension System)
+1. Create custom extension: "Create a tool that lists all DualPilot sites"
+2. Verify AI creates extension in `extensions/dualpilot-tools/`
+3. Test extension registration in AesopIDE
 4. Use the tool in a prompt: "List all sites in DualPilot"
-5. Test checkpoint system:
-   - Make code changes
-   - Create checkpoint
-   - Make more changes
-   - Click "Compare with Checkpoint" - verify diff shows correctly
-   - Click "Restore Checkpoint" - verify files revert
+
+#### Manual Verification (Checkpoints)
+1. Make code changes to a file
+2. Create checkpoint via AgentManager
+3. Make more changes
+4. Click "Compare with Checkpoint" - verify diff shows correctly
+5. Click "Restore Checkpoint" - verify files revert
+
+#### Manual Verification (Context Shortcuts)
+1. Type `@file src/renderer/App.jsx` in prompt
+2. Verify file content added to context automatically
+3. Type `@url https://docs.example.com/api`
+4. Verify URL content fetched and added to context
 
 ---
 
@@ -801,26 +1058,46 @@ Steps:
 
 ## Summary
 
-**Total Phases:** 17 (6 completed, 1 in progress, 10 planned)
+**Total Phases:** 18 (7 completed, 11 planned)
+
+**Recently Added Enhancements (from repository analysis):**
+- ✅ Phase 7.5: Electron Best Practices (ErrorBoundary, IPC Schema, Workspace State)
+- ✅ Phase 8: Monaco Editor integration + VSCode Task Runner pattern
+- ✅ Phase 17: Theia Extension System for clean MCP integration
 
 **byLLM/RAG Integration Points:**
 - ✅✅ Phase 10 (Cloud Context): CORE - Ingests schemas into RAG
 - ✅✅ Phase 14 (Test Integration): CORE - Retrieves debugging patterns
 - ✅✅ Phase 16 (Live Search): CORE - Auto-ingests web search results into RAG
-- ✅ Phases 7, 8, 9, 11, 12: Query RAG for best practices
+- ✅ Phase 8: Monaco + RAG for enhanced code context
+- ✅ Phase 17: Extensions can contribute RAG sources
+- ✅ Phases 7, 9, 11, 12: Query RAG for best practices
 - ❌ Phase 13: No direct RAG integration (infrastructure)
 
 **Cline-Inspired Features:**
-- Phase 8: Terminal self-correction loop
+- Phase 8: Terminal self-correction loop + Monaco Editor
 - Phase 12: Browser automation (Computer Use)
-- Phase 17: MCP support, checkpoints, @url/@file context shortcuts
+- Phase 17: MCP support via Extension System, checkpoints, @url/@file context shortcuts
+
+**Theia-Inspired Features:**
+- Phase 17: Extension Host with manifest-based configuration
+- Phase 17: Isolated extension contexts with service injection
+
+**VSCode-Inspired Features:**
+- Phase 8: Task Runner with problem matchers
+- Phase 7.5: Workspace state persistence (memento pattern)
+
+**Electron React Boilerplate Patterns:**
+- Phase 7.5: Error Boundary for crash protection
+- Phase 7.5: IPC channel validation schema
+- Phase 7.5: Workspace state persistence
 
 **Live Knowledge Features:**
 - Phase 16: Google Search Grounding with automatic RAG ingestion
 
 **Next Steps:**
-1. Complete Phase 6.4 (Agent Orchestration UI)
-2. Implement Phase 16 (Live Search + Auto-Ingest) - Quick win, enables fresh knowledge
+1. Implement Phase 7.5 (Electron Best Practices) - Quick wins for stability
+2. Implement Phase 8 (Monaco Editor + Task Runner) - Major UX improvement
 3. Begin Phase 10 (Supabase Context) - High priority for project-specific work
-4. Implement Phase 8 (Terminal Bridge) - Enables autonomous testing
+4. Implement Phase 16 (Live Search + Auto-Ingest) - Enables fresh knowledge
 5. Full stack validation with Real-World Project Milestone 1
