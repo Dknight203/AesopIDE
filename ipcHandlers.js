@@ -629,14 +629,9 @@ function registerIpcHandlers() {
             // Phase 16: Configure tools with Google Search Grounding if enabled
             const tools = [];
             if (enableSearch) {
-                console.log('[Phase 16] Search enabled, configuring Google Search Grounding');
+                console.log('[Phase 16] Search enabled, configuring Google Search');
                 tools.push({
-                    googleSearchRetrieval: {
-                        dynamicRetrievalConfig: {
-                            mode: "MODE_DYNAMIC",
-                            dynamicThreshold: 0.3 // Only ground when confidence is low
-                        }
-                    }
+                    googleSearch: {} // New API - simple declaration
                 });
             } else {
                 console.log('[Phase 16] Search disabled, no grounding');
@@ -653,9 +648,13 @@ function registerIpcHandlers() {
 
             // Phase 16: Extract and auto-ingest grounded content
             let groundingMetadata = null;
-            if (enableSearch && result.response.groundingMetadata) {
-                groundingMetadata = result.response.groundingMetadata;
-                console.log("[Phase 16] Grounding metadata received:", groundingMetadata);
+            if (enableSearch && result.response.candidates && result.response.candidates[0]) {
+                const candidate = result.response.candidates[0];
+                groundingMetadata = candidate.groundingMetadata || candidate;
+                console.log("[Phase 16] Grounding metadata received:", {
+                    hasWebSearchQueries: !!groundingMetadata?.webSearchQueries,
+                    queries: groundingMetadata?.webSearchQueries
+                });
 
                 // Auto-ingest grounded content into RAG
                 if (groundingMetadata.webSearchQueries && groundingMetadata.webSearchQueries.length > 0) {
