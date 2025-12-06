@@ -12,6 +12,8 @@ export default function TopBar({
     onToggleBottomPanel,
     onNewPlan, // NEW PROP
     onIngest, // Phase 6.3
+    onToggleAgentManager, // Phase 6.4
+    showAgentManager, // Phase 6.4
     sidebarCollapsed,
     bottomPanelCollapsed,
 }) {
@@ -39,15 +41,15 @@ export default function TopBar({
                     <button onClick={onNewFolder} title="New Folder">
                         📂 New Folder
                     </button>
-                    <button 
-                        className="topbar-btn-accent" 
+                    <button
+                        className="topbar-btn-accent"
                         onClick={onNewPlan} // NEW BUTTON ACTION
                         title="Start a new AI Planning Session"
                     >
                         📝 Plan
                     </button>
-                    <button 
-                        className="topbar-btn-accent" 
+                    <button
+                        className="topbar-btn-accent"
                         onClick={onIngest}
                         title="Ingest documentation from URL or file"
                     >
@@ -63,6 +65,13 @@ export default function TopBar({
                     title="Open AI Prompt"
                 >
                     ✨ AI Prompt
+                </button>
+                <button
+                    className={`topbar-btn-accent ${showAgentManager ? 'active' : ''}`}
+                    onClick={onToggleAgentManager}
+                    title="Toggle Agent Manager"
+                >
+                    🤖 Agent
                 </button>
                 <button
                     className="topbar-btn-ghost"

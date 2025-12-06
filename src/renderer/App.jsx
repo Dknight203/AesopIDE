@@ -14,6 +14,7 @@ import StatusBar from "./components/StatusBar";
 // NEW COMPONENT IMPORT
 import PlanReview from "./components/PlanReview";
 import IngestModal from "./components/IngestModal"; // Phase 6.3
+import AgentManager from "./components/AgentManager"; // Phase 6.4
 
 import { getRoot, openFolderDialog } from "./lib/project";
 import { readFile, writeFile, newFile, newFolder } from "./lib/fileSystem";
@@ -36,6 +37,12 @@ export default function App() {
     // Phase 3.2 State: Stores content of the plan waiting for review
     const [planModalContent, setPlanModalContent] = useState(null);
     const [ingestModalOpen, setIngestModalOpen] = useState(false); // Phase 6.3
+
+    // Phase 6.4 State: Agent Manager panel visibility and execution state
+    const [showAgentManager, setShowAgentManager] = useState(false);
+    const [agentSteps, setAgentSteps] = useState([]);
+    const [currentStepIndex, setCurrentStepIndex] = useState(-1);
+    const [agentPaused, setAgentPaused] = useState(false);
 
     // Layout state
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -581,6 +588,9 @@ export default function App() {
                 onNewPlan={handleNewPlan}
                 // NEW PROP: Pass handler to TopBar (from IngestModal context)
                 onIngest={() => setIngestModalOpen(true)}
+                // Phase 6.4: Toggle Agent Manager
+                onToggleAgentManager={() => setShowAgentManager(!showAgentManager)}
+                showAgentManager={showAgentManager}
                 sidebarCollapsed={sidebarCollapsed}
                 bottomPanelCollapsed={bottomPanelCollapsed}
             />
@@ -669,11 +679,29 @@ export default function App() {
                     initialPlanContent={planModalContent}
                 />
             )}
-            
+
             {ingestModalOpen && (
                 <IngestModal
                     onClose={() => setIngestModalOpen(false)}
                     onIngest={(result) => setStatusMessage(result.message || 'Document ingested')}
+                />
+            )}
+
+            {/* Phase 6.4: Agent Manager Panel */}
+            {showAgentManager && (
+                <AgentManager
+                    onClose={() => setShowAgentManager(false)}
+                    steps={agentSteps}
+                    currentStepIndex={currentStepIndex}
+                    isPaused={agentPaused}
+                    onPause={() => setAgentPaused(true)}
+                    onResume={() => setAgentPaused(false)}
+                    onCancel={() => {
+                        setAgentSteps([]);
+                        setCurrentStepIndex(-1);
+                        setAgentPaused(false);
+                        setStatusMessage("Agent execution cancelled");
+                    }}
                 />
             )}
         </div>
