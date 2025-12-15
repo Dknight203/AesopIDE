@@ -16,9 +16,9 @@
 - ✅ Phase 6.5: Rich Artifacts (`Mermaid.jsx`, markdown rendering)
 - ✅ Phase 7: Asynchronous Task Management (`TaskQueue` with priorities, dependencies)
 - ✅ Phase 7.5: Electron Best Practices (`ErrorBoundary.jsx`, `ipcSchema.js`, `WorkspaceState`)
+- ✅ Phase 8: Monaco Editor + VSCode Task Runner + Self-Correction
 
 **Pending Phases (Antigravity Parity):**
-- 📋 Phase 8: Monaco Editor + VSCode Task Runner + Self-Correction
 - 📋 Phase 9: Automated Plan Execution
 - 📋 Phase 10: Supabase/Cloud Context Ingestion
 - 📋 Phase 11: Architectural Guardrails
@@ -231,8 +231,8 @@ Update UI to show multiple concurrent tasks:
 
 ---
 
-## Phase 8: Intelligent Tool Execution Layer (Pending)
-**Status:** 📋 Planned - Not yet implemented
+## Phase 8: Intelligent Tool Execution Layer ✅ COMPLETED
+**Status:** ✅ Implemented - December 2024
 **byLLM Integration:** ✅ Retrieves error resolution strategies from developer library
 
 ### Overview
@@ -1519,3 +1519,348 @@ After completing Phases 8, 18, 19, and 20, AesopIDE will be capable of:
 - ✅ Running on free local LLMs
 
 **Estimated development time to subscription elimination:** 40-60 hours of focused implementation
+
+---
+
+## Phase 24: Unity Game Development System (Pending)
+**Status:** 📋 Planned - Not yet implemented  
+**byLLM Integration:** ✅ Uses RAG for Unity best practices, monetization patterns, and platform requirements
+
+### Overview
+Transform AesopIDE into a complete commercial game development studio capable of reading game design documents, generating all required assets (art/audio), implementing Unity C# code, configuring monetization, and deploying to all major platforms (Mobile, Web, PC, Console).
+
+### User Review Required
+
+> [!IMPORTANT]
+> **Game Dev Mode Toggle:** All Unity features will be behind a new "🎮 Game Dev Mode" toggle in the top bar. When disabled, AesopIDE functions exactly as it does today with zero impact on existing workflows.
+
+> [!WARNING]
+> **Platform Requirements:**
+> - Unity Hub and Unity Editor(s) installed
+> - Unity Pro license required for console exports ($2,040/year)
+> - Developer accounts: Apple Developer, Google Play, Steam, Nintendo, PlayStation, Xbox
+> - Platform SDKs: Steam SDK, Nintendo SDK, PlayStation SDK, Xbox GDK (under NDA)
+> - External API keys: Unity Ads/AdMob, ElevenLabs/OpenAI Audio (optional), Stripe
+
+### Proposed Changes
+
+#### [MODIFY] [package.json](file:///c:/DevApps/AesopIDE/package.json)
+Add document parsing dependencies:
+```json
+{
+  "dependencies": {
+    "mammoth": "^1.6.0",     // .docx reader
+    "pdf-parse": "^1.1.1",   // .pdf reader
+    "csv-parse": "^5.5.0"    // .csv reader
+  }
+}
+```
+
+#### [MODIFY] [src/renderer/components/TopBar.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/TopBar.jsx)
+Add Game Dev Mode toggle:
+- New state: `gameDevMode` (default: false)
+- Visual indicator: 🎮 icon with on/off styling
+- Pass state to App.jsx and systemPrompt.js
+
+#### [MODIFY] [src/renderer/lib/ai/systemPrompt.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/systemPrompt.js)
+Make system prompt dynamic based on Game Dev Mode:
+```javascript
+export function getSystemPrompt(gameDevMode = false) {
+  let prompt = BASE_SYSTEM_PROMPT; // Existing prompt
+  
+  if (gameDevMode) {
+    prompt += `
+
+### GAME DEVELOPMENT MODE
+You are now a senior game developer, producer, and technical artist.
+
+**Your Role:**
+1. Read game design documents (Word, CSV, PDF) via readDesignDoc
+2. Create detailed game_plan.md for user approval
+3. Generate all required assets (sprites, textures, audio)
+4. Implement game code in Unity (C#)
+5. Configure monetization (ads, IAP, payments)
+6. Build for all target platforms
+
+**CRITICAL: Plan-First Protocol**
+- ALWAYS create game_plan.md before generating any assets or code
+- WAIT for user approval before execution
+- Allow user to edit plan between planning and execution phases
+
+### UNITY PLATFORM DEPLOYMENT
+**Mobile:** iOS (Xcode), Android (Gradle)
+**Web:** WebGL optimized builds
+**PC:** Steam (Steamworks SDK integration)
+**Console:** Nintendo Switch, PlayStation 5, Xbox Series
+
+### MONETIZATION SYSTEMS
+**Mobile Ads:** Unity Ads, AdMob integration patterns
+- Interstitial: After game over (every 2-3 runs)
+- Rewarded: Continue after fail, unlock hints
+- Banner: Bottom of main menu
+
+**In-App Purchases:** Unity IAP for mobile stores
+**Web Payments:** Stripe Checkout for unlock features
+**Steam:** Steamworks inventory, achievements, leaderboards
+
+### ASSET GENERATION WORKFLOW
+1. Plan assets needed (sprites, textures, sounds)
+2. Generate using generateGameAsset() BEFORE writing code
+3. Reference generated assets in Unity scripts
+4. Build and verify
+
+`;
+  }
+  
+  return prompt;
+}
+```
+
+#### [MODIFY] [ipcHandlers.js](file:///c:/DevApps/AesopIDE/ipcHandlers.js)
+Add document reading and audio generation handlers:
+```javascript
+const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
+const csvParse = require('csv-parse/sync');
+
+// Document reader
+ipcMain.handle("fs:readDocument", async (event, filePath) => {
+  const ext = path.extname(filePath).toLowerCase();
+  
+  try {
+    if (ext === '.docx') {
+      const result = await mammoth.extractRawText({ path: filePath });
+      return { ok: true, content: result.value };
+    }
+    if (ext === '.pdf') {
+      const dataBuffer = await fs.readFile(filePath);
+      const data = await pdfParse(dataBuffer);
+      return { ok: true, content: data.text };
+    }
+    if (ext === '.csv') {
+      const fileContent = await fs.readFile(filePath, 'utf8');
+      const records = csvParse.parse(fileContent, { columns: true });
+      return { ok: true, content: JSON.stringify(records, null, 2) };
+    }
+    // Fallback: plain text
+    const content = await fs.readFile(filePath, 'utf8');
+    return { ok: true, content };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Audio generation (placeholder for external API)
+ipcMain.handle("external:generateAudio", async (event, { prompt, fileName }) => {
+  // TODO: Integrate ElevenLabs, OpenAI Audio, or other TTS/music API
+  // For now, return placeholder/silent WAV
+  console.warn('[Audio Generation] Not implemented, returning placeholder');
+  return { ok: true, placeholder: true };
+});
+```
+
+#### [MODIFY] [src/renderer/lib/tools/framework.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tools/framework.js)
+Add Unity-specific tools:
+```javascript
+// Document reading
+case 'readDesignDoc':
+  if (!params.path) throw new Error("readDesignDoc requires 'path'");
+  const docResult = await window.aesop.fs.readDocument(params.path);
+  if (!docResult.ok) throw new Error(docResult.error);
+  return { content: docResult.content, path: params.path };
+
+// Unity CLI execution
+case 'unityRunCommand':
+  const unityPath = params.unityPath || 'Unity.exe';
+  const projectPath = params.projectPath || currentRoot;
+  const unityArgs = params.args || '';
+  const cmd = `"${unityPath}" -batchmode -quit -projectPath "${projectPath}" ${unityArgs}`;
+  const unityResult = await window.aesop.tools.runCommand(cmd);
+  return unityResult;
+
+// Smart C# script creation
+case 'unityCreateScript':
+  const className = params.className || 'NewScript';
+  const scriptPath = params.path || `${className}.cs`;
+  const scriptContent = params.content || generateMonoBehaviourTemplate(className);
+  await window.aesop.fs.writeFile(`Assets/Scripts/${scriptPath}`, scriptContent);
+  return { success: true, path: `Assets/Scripts/${scriptPath}` };
+
+// Platform-specific builds
+case 'unityBuildGame':
+  const buildCommands = {
+    'ios': '-buildTarget iOS -executeMethod BuildScript.BuildIOS',
+    'android': '-buildTarget Android -executeMethod BuildScript.BuildAndroid',
+    'webgl': '-buildTarget WebGL -executeMethod BuildScript.BuildWebGL',
+    'windows': '-buildTarget Win64 -executeMethod BuildScript.BuildWindows',
+    'steam': '-buildTarget Win64 -executeMethod BuildScript.BuildSteam',
+    'switch': '-buildTarget Switch -executeMethod BuildScript.BuildSwitch',
+    'ps5': '-buildTarget PS5 -executeMethod BuildScript.BuildPS5',
+    'xbox': '-buildTarget GameCoreXboxSeries -executeMethod BuildScript.BuildXbox'
+  };
+  const platform = params.platform || 'windows';
+  const buildArgs = buildCommands[platform];
+  if (!buildArgs) throw new Error(`Unknown platform: ${platform}`);
+  return await executeTool('unityRunCommand', { args: buildArgs });
+
+// Game asset generation
+case 'generateGameAsset':
+  if (params.type === 'image') {
+    // Use existing generate_image infrastructure
+    const imageName = params.imageName || 'game_asset';
+    const imagePath = await generateImage(params.prompt, imageName);
+    // Copy to Unity Assets folder
+    const destPath = `Assets/Textures/${params.fileName || imageName}.png`;
+    await window.aesop.fs.copyFile(imagePath, path.join(currentRoot, destPath));
+    return { success: true, unityPath: destPath, fullPath: imagePath };
+  }
+  if (params.type === 'audio') {
+    const audioResult = await window.aesop.external.generateAudio({
+      prompt: params.prompt,
+      fileName: params.fileName
+    });
+    if (audioResult.placeholder) {
+      return { success: true, warning: 'Audio generation not configured, using placeholder' };
+    }
+    const destPath = `Assets/Audio/${params.fileName}.wav`;
+    await window.aesop.fs.writeFile(destPath, audioResult.data);
+    return { success: true, unityPath: destPath };
+  }
+  throw new Error(`Unknown asset type: ${params.type}`);
+
+// Monetization configuration
+case 'configureMonetization':
+  const platforms = params.platforms || ['mobile'];
+  const strategy = params.strategy || 'ads'; // 'ads', 'iap', 'both'
+  const monetizationCode = generateMonetizationScript(platforms, strategy);
+  await window.aesop.fs.writeFile('Assets/Scripts/MonetizationManager.cs', monetizationCode);
+  return { success: true, path: 'Assets/Scripts/MonetizationManager.cs' };
+```
+
+Helper function for MonoBehaviour template:
+```javascript
+function generateMonoBehaviourTemplate(className) {
+  return `using UnityEngine;
+
+public class ${className} : MonoBehaviour
+{
+    void Start()
+    {
+        // Initialization
+    }
+
+    void Update()
+    {
+        // Called every frame
+    }
+}`;
+}
+
+function generateMonetizationScript(platforms, strategy) {
+  return `using UnityEngine;
+#if UNITY_ADS
+using UnityEngine.Advertisements;
+#endif
+
+public class MonetizationManager : MonoBehaviour
+{
+    public static MonetizationManager Instance { get; private set; }
+
+    void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+        DontDestroyOnLoad(gameObject);
+    }
+
+    void Start()
+    {
+        InitializeAds();
+    }
+
+    void InitializeAds()
+    {
+        #if UNITY_ADS
+        string gameId = "${platforms.includes('ios') ? 'YOUR_IOS_GAME_ID' : 'YOUR_ANDROID_GAME_ID'}";
+        Advertisement.Initialize(gameId, testMode: true);
+        #endif
+    }
+
+    public void ShowInterstitial()
+    {
+        #if UNITY_ADS
+        if (Advertisement.IsReady("Interstitial_Android"))
+        {
+            Advertisement.Show("Interstitial_Android");
+        }
+        #endif
+    }
+
+    public void ShowRewarded(System.Action onComplete)
+    {
+        #if UNITY_ADS
+        if (Advertisement.IsReady("Rewarded_Android"))
+        {
+            var options = new ShowOptions { resultCallback = result => {
+                if (result == ShowResult.Finished) onComplete?.Invoke();
+            }};
+            Advertisement.Show("Rewarded_Android", options);
+        }
+        #endif
+    }
+}`;
+}
+```
+
+### Verification Plan
+
+#### Manual Verification - Document Ingestion
+1. Create `game_design.docx` with text: "One-tap reaction game. Stop bar in green zone. Mobile + Web. Monetize with ads."
+2. Toggle on Game Dev Mode
+3. Prompt: "Read game_design.docx and create implementation plan"
+4. Verify AI creates `game_plan.md` with:
+   - Mechanics breakdown
+   - Required assets (sprites, sounds)
+   - Monetization strategy
+   - Target platforms
+
+#### Manual Verification - Asset Generation
+1. User approves plan
+2. Prompt: "Generate the bar sprite and green zone sprite"
+3. Verify AI:
+   - Calls `generateGameAsset` twice
+   - Creates images in `Assets/Textures/`
+   - Returns Unity-relative paths
+
+#### Manual Verification - Code Implementation
+1. Prompt: "Implement the tap controller script"
+2. Verify AI:
+   - Creates `TapController.cs` in `Assets/Scripts/`
+   - References generated sprites
+   - Includes score tracking logic
+
+#### Manual Verification - Monetization
+1. Prompt: "Configure ads for mobile"
+2. Verify AI:
+   - Calls `configureMonetization`
+   - Creates `MonetizationManager.cs`
+   - Includes Unity Ads integration code
+
+#### Manual Verification - Multi-Platform Build
+1. Prompt: "Build for WebGL and Android"
+2. Verify AI:
+   - Calls `unityBuildGame` twice
+   - Uses correct build targets
+   - Reports build status
+
+### Integration Points with Existing Phases
+- **Phase 6 (RAG)**: Ingest Unity best practices, common game patterns
+- **Phase 8 (Monaco)**: Syntax highlighting for C# scripts
+- **Phase 12 (Browser)**: Test WebGL builds automatically
+- **Phase 14 (Testing)**: Run Unity Test Framework tests
+
+### Limitations
+- Console SDKs must be manually installed (under NDA)
+- Audio generation requires external API setup
+- Unity must be in PATH or path manually configured
+- Platform builds require valid signing certificates/credentials
