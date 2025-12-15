@@ -23,6 +23,8 @@ import { scanProject } from "./lib/codebase/indexer";
 import { findFilesByName } from "./lib/codebase/search";
 // NEW TASK MANAGER IMPORTS
 import { executeChain, createPlanFile } from "./lib/tasks/manager";
+// Phase 7.5: Workspace State Persistence
+import { WorkspaceState } from "./lib/workspace/state";
 
 export default function App() {
     const [rootPath, setRootPath] = useState("");
