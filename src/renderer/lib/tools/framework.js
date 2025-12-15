@@ -1,5 +1,6 @@
 // src/renderer/lib/tools/framework.js
 import { terminalEvents } from "../events/terminalEvents";
+import { executeCommandWithParsing, validateCommand, executeWithRetry } from "./terminalBridge.js";
 
 /**
  * Executes a tool called by the AI model by mapping the tool name 
@@ -210,6 +211,62 @@ export async function executeTool(toolName, params) {
                 // Return full output (which might be JSON or plain text depending on flags)
                 fullOutput: linterCmdResult.output,
                 summary: `Linter completed with exit code ${testCmdResult.exitCode}. Check output for details.`
+            };
+
+        // -----------------------------------------------------------
+        // PHASE 8: TERMINAL COMMAND TOOLS WITH ERROR PARSING
+        // -----------------------------------------------------------
+        case 'executeTerminalCommand':
+        case 'runCommand':
+            if (!params.cmd && !params.command) {
+                throw new Error("executeTerminalCommand requires 'cmd' or 'command' parameter.");
+            }
+
+            const command = params.cmd || params.command;
+            const cwd = params.cwd || params.workingDirectory || '.';
+
+            // Validate command for safety
+            const validation = validateCommand(command);
+            if (!validation.ok) {
+                throw new Error(validation.error);
+            }
+
+            // Use retry logic if requested
+            const useRetry = params.retry !== false; // Default to true
+            const maxRetries = params.maxRetries || 3;
+
+            let terminalResult;
+            if (useRetry) {
+                console.log(`[Framework] Executing command with retry (max: ${maxRetries})`);
+                terminalResult = await executeWithRetry(command, cwd, maxRetries);
+            } else {
+                console.log(`[Framework] Executing command without retry`);
+                terminalResult = await executeCommandWithParsing(command, cwd);
+            }
+
+            // Emit terminal events for UI updates
+            terminalEvents.emit('command-start', { command });
+
+            if (terminalResult.success) {
+                terminalEvents.emit('command-output', { output: terminalResult.stdout });
+                terminalEvents.emit('command-end', { exitCode: terminalResult.exitCode });
+            } else {
+                terminalEvents.emit('command-error', {
+                    error: terminalResult.error || terminalResult.stderr
+                });
+            }
+
+            // Return structured result with parsed errors
+            return {
+                success: terminalResult.success,
+                command: terminalResult.command || command,
+                exitCode: terminalResult.exitCode,
+                stdout: terminalResult.stdout,
+                stderr: terminalResult.stderr,
+                parsedErrors: terminalResult.parsedErrors || [],
+                errorCount: terminalResult.parsedErrors?.length || 0,
+                // Flag for self-correction if there are errors
+                needsSelfCorrection: terminalResult.parsedErrors && terminalResult.parsedErrors.length > 0
             };
 
         default:

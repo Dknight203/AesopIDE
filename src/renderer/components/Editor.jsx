@@ -1,78 +1,112 @@
 // src/renderer/components/Editor.jsx
-import React, { useState, useRef } from "react";
+import React, { useRef } from "react";
+import MonacoEditor from "@monaco-editor/react";
 import "../styles/editor.css";
-import ContextMenu from "./ContextMenu";
 
 export default function Editor({ activeTab, onChangeContent, onSave }) {
-    const [contextMenu, setContextMenu] = useState(null);
-    const textareaRef = useRef(null);
+    const editorRef = useRef(null);
 
-    function handleContextMenu(e) {
-        e.preventDefault();
+    function handleEditorDidMount(editor, monaco) {
+        editorRef.current = editor;
 
-        const textarea = textareaRef.current;
-        const hasSelection = textarea && textarea.selectionStart !== textarea.selectionEnd;
+        // Preserve Ctrl+S save functionality
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+            if (onSave) {
+                onSave();
+            }
+        });
 
-        const items = [
-            {
-                label: 'Cut',
-                icon: '✂️',
-                shortcut: 'Ctrl+X',
-                disabled: !hasSelection,
-                onClick: () => {
-                    document.execCommand('cut');
-                }
-            },
-            {
-                label: 'Copy',
-                icon: '📋',
-                shortcut: 'Ctrl+C',
-                disabled: !hasSelection,
-                onClick: () => {
-                    document.execCommand('copy');
-                }
-            },
-            {
-                label: 'Paste',
-                icon: '📄',
-                shortcut: 'Ctrl+V',
-                onClick: () => {
-                    document.execCommand('paste');
-                }
-            },
-            { separator: true },
-            {
-                label: 'Select All',
-                icon: '🔲',
-                shortcut: 'Ctrl+A',
-                onClick: () => {
-                    if (textarea) {
-                        textarea.select();
-                    }
-                }
-            },
-            { separator: true },
-            {
-                label: 'Undo',
-                icon: '↶',
-                shortcut: 'Ctrl+Z',
-                onClick: () => {
-                    document.execCommand('undo');
-                }
-            },
-            {
-                label: 'Redo',
-                icon: '↷',
-                shortcut: 'Ctrl+Y',
-                onClick: () => {
-                    document.execCommand('redo');
+        // Add AI context query action (Ctrl+Shift+A)
+        editor.addAction({
+            id: 'aesop-ai-assist',
+            label: 'Ask AI About Selection',
+            keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyA],
+            contextMenuGroupId: 'aesop',
+            contextMenuOrder: 1.5,
+            run: (ed) => {
+                const selection = ed.getModel().getValueInRange(ed.getSelection());
+                if (selection && window.aesop && window.aesop.events) {
+                    window.aesop.events.emit('ai:contextQuery', { code: selection });
+                    console.log('[Editor] AI context query triggered with selection:', selection.substring(0, 50) + '...');
                 }
             }
-        ];
+        });
 
-        setContextMenu({ x: e.clientX, y: e.clientY, items });
+        console.log('[Editor] Monaco Editor mounted successfully');
     }
 
+    /**
+     * Detect language from file extension
+     * @param {string} path - File path
+     * @returns {string} Monaco language identifier
+     */
+    function getLanguage(path) {
+        if (!path) return 'plaintext';
+
+        const ext = path.split('.').pop().toLowerCase();
+
+        const languageMap = {
+            // JavaScript/TypeScript
+            js: 'javascript',
+            jsx: 'javascript',
+            ts: 'typescript',
+            tsx: 'typescript',
+            mjs: 'javascript',
+            cjs: 'javascript',
+
+            // Web
+            html: 'html',
+            htm: 'html',
+            css: 'css',
+            scss: 'scss',
+            sass: 'sass',
+            less: 'less',
+
+            // Data/Config
+            json: 'json',
+            xml: 'xml',
+            yaml: 'yaml',
+            yml: 'yaml',
+            toml: 'toml',
+
+            // Markdown/Text
+            md: 'markdown',
+            markdown: 'markdown',
+            txt: 'plaintext',
+
+            // Programming Languages
+            py: 'python',
+            java: 'java',
+            c: 'c',
+            cpp: 'cpp',
+            cs: 'csharp',
+            go: 'go',
+            rs: 'rust',
+            rb: 'ruby',
+            php: 'php',
+
+            // Shell/Scripts
+            sh: 'shell',
+            bash: 'shell',
+            zsh: 'shell',
+            ps1: 'powershell',
+            bat: 'bat',
+            cmd: 'bat',
+
+            // Database
+            sql: 'sql',
+
+            // Other
+            dockerfile: 'dockerfile',
+            docker: 'dockerfile',
+            gitignore: 'plaintext',
+            env: 'plaintext'
+        };
+
+        return languageMap[ext] || 'plaintext';
+    }
+
+    // Empty state when no file is open
     if (!activeTab) {
         return (
             <div className="editor-panel">
@@ -89,22 +123,50 @@ export default function Editor({ activeTab, onChangeContent, onSave }) {
 
     return (
         <div className="editor-panel">
-            <textarea
-                ref={textareaRef}
-                className="editor-textarea"
+            <MonacoEditor
+                height="100%"
+                language={getLanguage(activeTab.path)}
                 value={activeTab.content || ""}
-                onChange={(e) => onChangeContent(e.target.value)}
-                onContextMenu={handleContextMenu}
-                spellCheck={false}
+                onChange={onChangeContent}
+                theme="vs-dark"
+                options={{
+                    minimap: { enabled: true },
+                    fontSize: 14,
+                    fontFamily: "'Consolas', 'Courier New', monospace",
+                    automaticLayout: true,  // Auto-adjust on panel resize
+                    tabSize: 2,
+                    insertSpaces: true,
+                    wordWrap: 'off',
+                    scrollBeyondLastLine: false,
+                    smoothScrolling: true,
+                    cursorBlinking: 'smooth',
+                    cursorSmoothCaretAnimation: true,
+                    renderLineHighlight: 'all',
+                    lineNumbers: 'on',
+                    glyphMargin: true,
+                    folding: true,
+                    foldingStrategy: 'indentation',
+                    showFoldingControls: 'mouseover',
+                    matchBrackets: 'always',
+                    autoClosingBrackets: 'always',
+                    autoClosingQuotes: 'always',
+                    formatOnPaste: true,
+                    formatOnType: true,
+                    suggestOnTriggerCharacters: true,
+                    acceptSuggestionOnEnter: 'on',
+                    quickSuggestions: true,
+                    parameterHints: { enabled: true },
+                    snippetSuggestions: 'inline',
+                    contextmenu: true,  // Enable Monaco's built-in context menu
+                }}
+                onMount={handleEditorDidMount}
+                loading={
+                    <div className="editor-loading">
+                        <div className="loading-spinner"></div>
+                        <div>Loading Monaco Editor...</div>
+                    </div>
+                }
             />
-            {contextMenu && (
-                <ContextMenu
-                    x={contextMenu.x}
-                    y={contextMenu.y}
-                    items={contextMenu.items}
-                    onClose={() => setContextMenu(null)}
-                />
-            )}
         </div>
     );
 }
