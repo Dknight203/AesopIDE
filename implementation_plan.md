@@ -1,6 +1,6 @@
 # AesopIDE Comprehensive Implementation Plan
 
-**Goal:** Build a fully autonomous AI coding agent (inspired by Cline) capable of completing DualPilot development, leveraging byLLM/RAG infrastructure for intelligent context retrieval.
+**Goal:** Build a fully autonomous AI coding agent that can **replace Antigravity/Google One AI subscription ($20/month)**, leveraging local LLMs and the byLLM/RAG infrastructure for intelligent, cost-free AI assistance.
 
 ---
 
@@ -17,16 +17,22 @@
 - ✅ Phase 7: Asynchronous Task Management (`TaskQueue` with priorities, dependencies)
 - ✅ Phase 7.5: Electron Best Practices (`ErrorBoundary.jsx`, `ipcSchema.js`, `WorkspaceState`)
 
-**Pending Phases (Planned Enhancements):**
-- 📋 Phase 8: Monaco Editor + VSCode Task Runner + Terminal Bridge
+**Pending Phases (Antigravity Parity):**
+- 📋 Phase 8: Monaco Editor + VSCode Task Runner + Self-Correction
 - 📋 Phase 9: Automated Plan Execution
 - 📋 Phase 10: Supabase/Cloud Context Ingestion
 - 📋 Phase 11: Architectural Guardrails
-- 📋 Phase 12: Visual QA/UX Testing
+- 📋 Phase 12: Visual QA/UX Testing (Browser Automation)
 - 📋 Phase 13: Artifact Generation & Display
 - 📋 Phase 14: Autonomous Test Integration
 - 📋 Phase 16: Live Web Search & Auto-Ingestion
 - 📋 Phase 17: Extension System + MCP + Checkpoints
+- 🆕 Phase 18: **Local LLM Support** (Ollama/LMStudio) - $0 AI
+- 🆕 Phase 19: **Comprehensive Tool Framework** (40+ tools)
+- 🆕 Phase 20: **Agentic Loop Engine** (plan-execute-verify-backtrack)
+- 🆕 Phase 21: **Context Window Management** (summarization)
+- 🆕 Phase 22: **Vision/Image Analysis** (screenshot debugging)
+- 🆕 Phase 23: **Multi-Agent Orchestration** (sub-agents)
 
 ---
 
@@ -1007,6 +1013,387 @@ Add context shortcuts (Cline-style):
 
 ---
 
+## Phase 18: Local LLM Support (Ollama/LMStudio) 🆕
+**Status:** 📋 Planned - Critical for subscription-free operation
+**Goal:** Enable AesopIDE to use free, local language models instead of paid API
+
+### Overview
+Integrate local LLM backends (Ollama, LMStudio, llama.cpp) to eliminate API costs entirely. This is the **subscription-killer feature** - with a capable GPU, you pay $0 for AI assistance.
+
+### User Review Required
+
+> [!IMPORTANT]
+> Local LLMs require significant GPU resources. Recommended: 16GB+ VRAM for best models (Llama 3.1 70B). 8GB VRAM can run smaller models (Llama 3.1 8B, Mistral 7B).
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/ai/providers/ollama.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/providers/ollama.js)
+Ollama integration:
+- Connect to local Ollama server (http://localhost:11434)
+- List available models
+- Stream completions with tool calling format
+- Handle Ollama-specific prompt templates
+
+#### [NEW] [src/renderer/lib/ai/providers/lmstudio.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/providers/lmstudio.js)
+LMStudio integration:
+- Connect via OpenAI-compatible API (localhost:1234)
+- Support for GGUF models
+- Handle context window limits
+
+#### [NEW] [src/renderer/lib/ai/providers/openai-compatible.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/providers/openai-compatible.js)
+Generic OpenAI-compatible provider:
+- Works with any OpenAI-compatible API (Together.ai, Groq, local servers)
+- Configurable base URL and API key
+- Enables future provider additions without code changes
+
+#### [MODIFY] [src/renderer/lib/ai/modelManager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/modelManager.js)
+Model provider abstraction:
+- Provider registry (Gemini, Ollama, LMStudio, OpenAI-compatible)
+- Model switching at runtime
+- Fallback chain (try local first, fall back to API)
+- Cost tracking (show $0 for local, estimate cost for API)
+
+#### [NEW] [src/renderer/components/ModelSelector.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/ModelSelector.jsx)
+UI for model selection:
+- Dropdown to select provider and model
+- Show model capabilities (context window, tool support)
+- Display connection status for local providers
+- Cost indicator (💰 Paid API / 🆓 Local)
+
+**Recommended Local Models:**
+| Model | VRAM Required | Quality | Tool Calling |
+|-------|---------------|---------|--------------|
+| Llama 3.1 70B | 40GB+ | Excellent | ✅ Native |
+| Llama 3.1 8B | 8GB | Good | ✅ Native |
+| DeepSeek Coder 33B | 20GB | Excellent for code | ⚠️ Prompted |
+| Qwen2.5 72B | 40GB+ | Excellent | ✅ Native |
+| Mistral 7B | 6GB | Good | ⚠️ Prompted |
+
+### Verification Plan
+
+#### Manual Verification
+1. Install Ollama: `winget install Ollama.Ollama`
+2. Pull a model: `ollama pull llama3.1:8b`
+3. In AesopIDE, select Ollama provider in ModelSelector
+4. Send a coding prompt and verify response streams correctly
+5. Request a file edit and verify tool calling works
+6. Check status bar shows "🆓 Local" instead of cost estimate
+
+---
+
+## Phase 19: Comprehensive Tool Framework 🆕
+**Status:** 📋 Planned - Required for Antigravity parity
+**Goal:** Implement all 40+ tools that Antigravity has
+
+### Overview
+Antigravity has a rich set of integrated tools. AesopIDE needs to match this for true parity.
+
+### Tools to Implement
+
+#### File System Tools (Enhance existing)
+- [x] `readFile` - Already implemented
+- [x] `writeFile` - Already implemented
+- [x] `newFile` / `newFolder` - Already implemented
+- [ ] `deleteFile` - Add with confirmation
+- [ ] `renameFile` / `moveFile` - Add path manipulation
+- [ ] `copyFile` - Add file duplication
+- [ ] `listDir` - Enhanced directory listing with metadata
+
+#### Code Intelligence Tools (New)
+- [ ] `codebaseSearch` - Semantic search across codebase
+- [ ] `grepSearch` - Regex pattern search (ripgrep integration)
+- [ ] `findByName` - File/folder name search (fd integration)
+- [ ] `viewCodeItem` - View specific function/class definitions
+- [ ] `viewFileOutline` - AST-based file structure
+
+#### Terminal Tools (Enhance existing)
+- [x] `runCommand` - Already implemented
+- [ ] `commandStatus` - Check background command status
+- [ ] `sendCommandInput` - Send input to running command
+- [ ] `killCommand` - Terminate running command
+
+#### Browser Tools (Phase 12 expansion)
+- [ ] `browserSubagent` - Spawn browser automation task
+- [ ] `readBrowserPage` - Get page content/DOM
+- [ ] `captureBrowserScreenshot` - Take screenshot
+- [ ] `readUrlContent` - Fetch URL without browser
+
+#### Git Tools (Enhance existing)
+- [x] `gitDiff` - Already implemented
+- [x] `gitApplyPatch` - Already implemented
+- [ ] `gitStatus` - Show working tree status
+- [ ] `gitCommit` - Create commit with message
+- [ ] `gitBranch` - Branch operations
+- [ ] `gitLog` - View commit history
+
+#### Image Tools (New)
+- [ ] `generateImage` - AI image generation (DALL-E, Stable Diffusion)
+- [ ] `viewImage` - Display image in IDE
+- [ ] `analyzeImage` - Vision model analysis
+
+#### Artifact Tools (New)
+- [ ] `createArtifact` - Create markdown/plan/walkthrough
+- [ ] `updateArtifact` - Modify existing artifact
+
+### Implementation Pattern
+
+Each tool should follow this structure:
+```javascript
+// src/renderer/lib/tools/definitions/readFile.js
+export const readFileTool = {
+    name: 'readFile',
+    description: 'Read the contents of a file from the filesystem',
+    parameters: {
+        type: 'object',
+        properties: {
+            path: { type: 'string', description: 'Absolute path to file' }
+        },
+        required: ['path']
+    },
+    execute: async ({ path }) => {
+        return await window.aesop.fs.readFile(path);
+    }
+};
+```
+
+---
+
+## Phase 20: Agentic Loop Engine 🆕
+**Status:** 📋 Planned - Core architecture for autonomous operation
+**Goal:** Implement the plan-execute-verify-backtrack loop that makes Antigravity effective
+
+### Overview
+Antigravity runs in an agentic loop that can:
+1. **Plan** - Break down complex tasks
+2. **Execute** - Run tools and make changes
+3. **Verify** - Check results and detect errors
+4. **Backtrack** - Undo and retry when things go wrong
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/agent/loop.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/loop.js)
+Core agent loop:
+```javascript
+class AgentLoop {
+    constructor(modelManager, toolFramework) {
+        this.model = modelManager;
+        this.tools = toolFramework;
+        this.mode = 'PLANNING'; // PLANNING | EXECUTION | VERIFICATION
+        this.history = [];
+        this.checkpoints = [];
+    }
+
+    async run(userRequest) {
+        this.createCheckpoint();
+        
+        while (!this.isComplete()) {
+            const response = await this.model.generate({
+                messages: this.history,
+                tools: this.tools.getDefinitions(),
+                systemPrompt: this.buildSystemPrompt()
+            });
+            
+            if (response.toolCalls) {
+                for (const call of response.toolCalls) {
+                    try {
+                        const result = await this.tools.execute(call);
+                        this.history.push({ role: 'tool', content: result });
+                        
+                        // Verification step
+                        if (this.mode === 'EXECUTION' && this.shouldVerify(call)) {
+                            await this.verify(call, result);
+                        }
+                    } catch (error) {
+                        await this.handleError(error, call);
+                    }
+                }
+            }
+            
+            if (response.modeSwitch) {
+                this.mode = response.modeSwitch;
+            }
+        }
+    }
+
+    async handleError(error, failedCall) {
+        this.retryCount++;
+        if (this.retryCount > 3) {
+            this.restoreCheckpoint();
+            return this.escalateToUser(error);
+        }
+        // Add error to context for self-correction
+        this.history.push({ 
+            role: 'system', 
+            content: `Tool call failed: ${error.message}. Please try a different approach.`
+        });
+    }
+}
+```
+
+#### [NEW] [src/renderer/lib/agent/modes.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/modes.js)
+Mode-specific behaviors:
+- **PLANNING**: Focus on understanding, create implementation plan
+- **EXECUTION**: Make changes, run commands
+- **VERIFICATION**: Test changes, validate results
+
+#### [NEW] [src/renderer/lib/agent/checkpoints.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/checkpoints.js)
+Checkpoint management:
+- Git stash-based checkpoints
+- File state snapshots
+- Restore on critical failures
+
+#### [MODIFY] [src/renderer/components/AgentManager.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/AgentManager.jsx)
+Enhanced agent UI:
+- Show current mode (Planning/Execution/Verification)
+- Display checkpoint history
+- Manual checkpoint restore option
+- Error recovery controls
+
+---
+
+## Phase 21: Context Window Management 🆕
+**Status:** 📋 Planned - Critical for long sessions
+**Goal:** Manage large context windows efficiently like Antigravity
+
+### Overview
+Antigravity can hold ~1M tokens in context. AesopIDE needs smart context management to:
+- Summarize old messages to free space
+- Prioritize relevant context
+- Handle very large files gracefully
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/context/manager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/context/manager.js)
+Context window manager:
+- Track token usage per message
+- Automatic summarization when approaching limit
+- Priority scoring for context items
+- Sliding window with anchored important context
+
+#### [NEW] [src/renderer/lib/context/summarizer.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/context/summarizer.js)
+Conversation summarization:
+- Compress old messages into summaries
+- Preserve key decisions and code changes
+- Use smaller/faster model for summarization
+
+#### [NEW] [src/renderer/lib/context/tokenizer.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/context/tokenizer.js)
+Token counting:
+- Accurate token estimation (tiktoken or model-specific)
+- Real-time context usage indicator
+- Warning at 80% capacity
+
+#### [MODIFY] [src/renderer/components/PromptPanel.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PromptPanel.jsx)
+Context usage display:
+- Token count indicator in status
+- "Summarize conversation" button
+- Context priority visualization
+
+---
+
+## Phase 22: Vision/Image Analysis 🆕
+**Status:** 📋 Planned - Required for UI debugging and screenshot analysis
+**Goal:** Enable AesopIDE to see and understand images like Antigravity
+
+### Overview
+Antigravity can analyze screenshots, UI mockups, and error images. AesopIDE needs this for:
+- Visual debugging ("Why does this button look wrong?")
+- UI implementation from mockups
+- Error screenshot analysis
+
+### Proposed Changes
+
+#### [MODIFY] [src/renderer/lib/ai/modelManager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/modelManager.js)
+Add vision capabilities:
+- Detect if current model supports vision
+- Handle image inputs in message format
+- Base64 encode images for API
+
+#### [NEW] [src/renderer/lib/vision/imageProcessor.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/vision/imageProcessor.js)
+Image handling:
+- Resize large images to save tokens
+- Convert formats (PNG, JPG, WebP)
+- Extract from clipboard (paste image)
+
+#### [MODIFY] [src/renderer/components/PromptPanel.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PromptPanel.jsx)
+Image input support:
+- Drag-and-drop images into prompt
+- Paste image from clipboard (Ctrl+V)
+- Image preview before sending
+- "Analyze screenshot" quick action
+
+#### [NEW] [ipcHandlers.js → vision:captureScreen](file:///c:/DevApps/AesopIDE/ipcHandlers.js)
+Screen capture:
+- Capture specific window
+- Capture screen region
+- Capture current browser state
+
+---
+
+## Phase 23: Multi-Agent Orchestration 🆕
+**Status:** 📋 Planned - Advanced capability for complex tasks
+**Goal:** Spawn specialized sub-agents like Antigravity's browser_subagent
+
+### Overview
+Antigravity can spawn sub-agents for specific tasks (browser automation, research, etc.). AesopIDE needs this for:
+- Parallel task execution
+- Specialized agents (browser, research, coding)
+- Task delegation without blocking main agent
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/agent/orchestrator.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/orchestrator.js)
+Agent orchestration:
+```javascript
+class AgentOrchestrator {
+    constructor() {
+        this.mainAgent = null;
+        this.subAgents = new Map();
+    }
+
+    async spawnSubAgent(type, task) {
+        const subAgent = new SubAgent({
+            type, // 'browser', 'research', 'coding'
+            task,
+            parentContext: this.mainAgent.getSummary(),
+            tools: this.getToolsForType(type)
+        });
+        
+        this.subAgents.set(subAgent.id, subAgent);
+        const result = await subAgent.run();
+        
+        // Report back to main agent
+        this.mainAgent.receiveSubAgentResult(subAgent.id, result);
+        return result;
+    }
+
+    getToolsForType(type) {
+        switch (type) {
+            case 'browser':
+                return ['launchBrowser', 'click', 'type', 'screenshot', 'getDom'];
+            case 'research':
+                return ['searchWeb', 'readUrl', 'summarize'];
+            case 'coding':
+                return ['readFile', 'writeFile', 'runCommand', 'searchCode'];
+        }
+    }
+}
+```
+
+#### [NEW] [src/renderer/lib/agent/subAgent.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/subAgent.js)
+Sub-agent implementation:
+- Lighter context (focused on specific task)
+- Limited tool set (only what's needed)
+- Returns summary to parent agent
+- Isolated execution (errors don't crash main agent)
+
+#### [MODIFY] [src/renderer/components/AgentManager.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/AgentManager.jsx)
+Sub-agent visualization:
+- Show active sub-agents as nested cards
+- Display sub-agent progress
+- Allow cancellation of individual sub-agents
+
+---
+
 ## Real-World Project Verification
 
 These milestones demonstrate AesopIDE's capabilities on actual projects (including DualPilot or any other project you're working on).
@@ -1058,14 +1445,54 @@ Steps:
 
 ## Summary
 
-**Total Phases:** 18 (7 completed, 11 planned)
+**Total Phases:** 24 (8 completed, 16 planned)
 
-**Recently Added Enhancements (from repository analysis):**
+**🎯 GOAL: Replace $20/month Google One AI subscription with AesopIDE**
+
+### Subscription Elimination Roadmap
+
+| Phase | What It Enables | Priority |
+|-------|-----------------|----------|
+| ✅ Phase 7.5 | Stability (ErrorBoundary) | Done |
+| 📋 Phase 8 | Monaco Editor + Self-correction | **Critical** |
+| 📋 Phase 12 | Browser automation | High |
+| 📋 Phase 14 | Test-driven debugging | High |
+| 📋 Phase 18 | **Local LLM = $0 AI** | **Critical** |
+| 📋 Phase 19 | All 40+ Antigravity tools | **Critical** |
+| 📋 Phase 20 | Agentic loop (plan-execute-verify) | **Critical** |
+| 📋 Phase 21 | Long session context management | High |
+| 📋 Phase 22 | Image/vision analysis | Medium |
+| 📋 Phase 23 | Multi-agent orchestration | Medium |
+
+### Cost Comparison After All Phases Complete
+
+| Option | Monthly Cost | Requirements |
+|--------|--------------|--------------|
+| Google One AI Premium | $20/month | Internet |
+| AesopIDE + Gemini API | $5-15/month | Internet |
+| AesopIDE + Local LLM | $0/month | 8GB+ VRAM GPU |
+
+### Recently Added Phases (Antigravity Parity):
+- 🆕 Phase 18: Local LLM Support (Ollama, LMStudio) - **Eliminates API costs**
+- 🆕 Phase 19: Comprehensive Tool Framework (40+ tools)
+- 🆕 Phase 20: Agentic Loop Engine (plan-execute-verify-backtrack)
+- 🆕 Phase 21: Context Window Management (summarization, prioritization)
+- 🆕 Phase 22: Vision/Image Analysis (screenshot debugging)
+- 🆕 Phase 23: Multi-Agent Orchestration (sub-agents for specialized tasks)
+
+### Previously Planned Phases:
 - ✅ Phase 7.5: Electron Best Practices (ErrorBoundary, IPC Schema, Workspace State)
-- ✅ Phase 8: Monaco Editor integration + VSCode Task Runner pattern
-- ✅ Phase 17: Theia Extension System for clean MCP integration
+- 📋 Phase 8: Monaco Editor + VSCode Task Runner + Self-Correction
+- 📋 Phase 9: Automated Plan Execution
+- 📋 Phase 10: Supabase/Cloud Context Ingestion
+- 📋 Phase 11: Architectural Guardrails
+- 📋 Phase 12: Visual QA/UX Testing (Browser Automation)
+- 📋 Phase 13: Artifact Generation & Display
+- 📋 Phase 14: Autonomous Test Integration
+- 📋 Phase 16: Live Web Search & Auto-Ingestion
+- 📋 Phase 17: Extension System + MCP + Checkpoints
 
-**byLLM/RAG Integration Points:**
+### byLLM/RAG Integration Points:
 - ✅✅ Phase 10 (Cloud Context): CORE - Ingests schemas into RAG
 - ✅✅ Phase 14 (Test Integration): CORE - Retrieves debugging patterns
 - ✅✅ Phase 16 (Live Search): CORE - Auto-ingests web search results into RAG
@@ -1074,30 +1501,21 @@ Steps:
 - ✅ Phases 7, 9, 11, 12: Query RAG for best practices
 - ❌ Phase 13: No direct RAG integration (infrastructure)
 
-**Cline-Inspired Features:**
-- Phase 8: Terminal self-correction loop + Monaco Editor
-- Phase 12: Browser automation (Computer Use)
-- Phase 17: MCP support via Extension System, checkpoints, @url/@file context shortcuts
+### Recommended Implementation Order:
+1. ✅ Phase 7.5 (Done) - Stability foundation
+2. 📋 Phase 8 - Monaco Editor + Self-correction loop
+3. 📋 Phase 18 - **Local LLM Support (critical for $0 operation)**
+4. 📋 Phase 19 - Tool framework (match Antigravity capabilities)
+5. 📋 Phase 20 - Agentic loop (core autonomous behavior)
+6. 📋 Phase 12 - Browser automation
+7. 📋 Phase 14 - Autonomous testing
+8. 📋 Phase 21-23 - Advanced features (context, vision, multi-agent)
 
-**Theia-Inspired Features:**
-- Phase 17: Extension Host with manifest-based configuration
-- Phase 17: Isolated extension contexts with service injection
+### When You Can Cancel Google One:
+After completing Phases 8, 18, 19, and 20, AesopIDE will be capable of:
+- ✅ All file/code operations I can do
+- ✅ Planning and executing multi-step tasks
+- ✅ Self-correcting on errors
+- ✅ Running on free local LLMs
 
-**VSCode-Inspired Features:**
-- Phase 8: Task Runner with problem matchers
-- Phase 7.5: Workspace state persistence (memento pattern)
-
-**Electron React Boilerplate Patterns:**
-- Phase 7.5: Error Boundary for crash protection
-- Phase 7.5: IPC channel validation schema
-- Phase 7.5: Workspace state persistence
-
-**Live Knowledge Features:**
-- Phase 16: Google Search Grounding with automatic RAG ingestion
-
-**Next Steps:**
-1. Implement Phase 7.5 (Electron Best Practices) - Quick wins for stability
-2. Implement Phase 8 (Monaco Editor + Task Runner) - Major UX improvement
-3. Begin Phase 10 (Supabase Context) - High priority for project-specific work
-4. Implement Phase 16 (Live Search + Auto-Ingest) - Enables fresh knowledge
-5. Full stack validation with Real-World Project Milestone 1
+**Estimated development time to subscription elimination:** 40-60 hours of focused implementation
