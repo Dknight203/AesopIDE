@@ -1,7 +1,7 @@
 // src/renderer/components/PromptPanel.jsx
 import React, { useState, useRef, useEffect } from "react";
 import "../styles/prompt.css";
-import { askGemini } from "../lib/gemini";
+import { askGemini, askGeminiStream } from "../lib/gemini";
 import { SYSTEM_PROMPT } from "../lib/ai/systemPrompt";
 import { buildFileContext } from "../lib/codebase/context";
 import parseToolCalls from "../lib/ai/toolParser";
@@ -10,6 +10,7 @@ import ContextMenu from "./ContextMenu";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Mermaid from './Mermaid';
+import ThinkingBlock from './ThinkingBlock';
 import '../styles/markdown.css';
 
 
@@ -448,44 +449,132 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
 
 
 
-        // 1. Send to AI
-        const reply = await askGemini(userPrompt, {
-            systemPrompt: SYSTEM_PROMPT,
-            fileContext,
-            // Pass the entire history array for continuous context (Phase 4.1)
-            history: history,
-            // NEW: Pass both knowledge contexts
-            knowledgeContext: knowledgeContext,
-            globalKnowledgeContext: globalKnowledgeContext, // 🌟 NEW PROP
-            enableSearch: enableSearch // Phase 16: Computed from searchMode
-        });
-        const aiMessage = {
+        // 1. Send to AI (Streaming)
+        // Create a placeholder message for the AI response
+        const placeholderId = Date.now().toString();
+        const initialAiMessage = {
             role: "assistant",
-            content: reply,
+            content: "", // Start empty
             timestamp: new Date(),
+            id: placeholderId
         };
-        setMessages((prev) => [...prev, aiMessage]);
+        setMessages((prev) => [...prev, initialAiMessage]);
+
+        let reply = "";
+        try {
+            reply = await askGeminiStream(userPrompt, {
+                systemPrompt: SYSTEM_PROMPT,
+                fileContext,
+                // Pass the entire history array for continuous context (Phase 4.1)
+                history: history,
+                // NEW: Pass both knowledge contexts
+                knowledgeContext: knowledgeContext,
+                globalKnowledgeContext: globalKnowledgeContext, // 🌟 NEW PROP
+                enableSearch: enableSearch // Phase 16: Computed from searchMode
+            }, (chunk, accumulated) => {
+                // Update the last message (which is our placeholder) with new content
+                setMessages((prev) => {
+                    const newMessages = [...prev];
+                    const lastMsg = newMessages[newMessages.length - 1];
+                    if (lastMsg && lastMsg.role === 'assistant') {
+                        lastMsg.content = accumulated;
+                    }
+                    return newMessages;
+                });
+            });
+        } catch (streamErr) {
+            console.error("Streaming failed:", streamErr);
+            reply = "Error during streaming: " + streamErr.message;
+            setMessages(prev => {
+                const newMessages = [...prev];
+                const lastMsg = newMessages[newMessages.length - 1];
+                lastMsg.content = reply;
+                return newMessages;
+            });
+        }
 
 
         // 2. Check for tool calls
         const toolCalls = parseToolCalls(reply);
         if (toolCalls.length > 0) {
+
+            // Create a "Thinking" block message to group all tool executions
+            const thinkingMsg = {
+                role: "thinking", // Custom role for our component
+                content: "Processing tool calls...",
+                steps: [], // Will populate with execution steps
+                isFinished: false,
+                timestamp: new Date()
+            };
+            setMessages(prev => [...prev, thinkingMsg]);
+
+            const updateThinkingStep = (stepIndex, update) => {
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    // Find our thinking message (it should be the last one or close to it)
+                    // We search from the end
+                    for (let i = newMessages.length - 1; i >= 0; i--) {
+                        if (newMessages[i].role === 'thinking' && !newMessages[i].isFinished) {
+                            const steps = [...newMessages[i].steps];
+                            steps[stepIndex] = { ...steps[stepIndex], ...update };
+                            newMessages[i] = { ...newMessages[i], steps };
+                            break;
+                        }
+                    }
+                    return newMessages;
+                });
+            };
+
+            const addThinkingStep = (step) => {
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    for (let i = newMessages.length - 1; i >= 0; i--) {
+                        if (newMessages[i].role === 'thinking' && !newMessages[i].isFinished) {
+                            const steps = [...newMessages[i].steps, step];
+                            newMessages[i] = { ...newMessages[i], steps };
+                            break;
+                        }
+                    }
+                    return newMessages;
+                });
+                return 0; // In a real implementation we might need the index, but for now we just append
+            };
+
+            const finishThinking = () => {
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    for (let i = newMessages.length - 1; i >= 0; i--) {
+                        if (newMessages[i].role === 'thinking' && !newMessages[i].isFinished) {
+                            newMessages[i] = { ...newMessages[i], isFinished: true };
+                            break;
+                        }
+                    }
+                    return newMessages;
+                });
+            }
+
+
             // Execute tools
-            for (const call of toolCalls) {
-                const isFileOp = ['writeFile', 'readFile', 'findFiles', 'createTask', 'readTask', 'createPlan', 'readPlan'].includes(call.tool);
+            // We'll collect results to send back to AI
+            const toolResults = [];
 
-                const toolMsg = {
-                    role: "tool",
-                    content: `Executing tool: ${call.tool}...`,
-                    timestamp: new Date()
-                };
-                setMessages(prev => [...prev, toolMsg]);
+            for (let i = 0; i < toolCalls.length; i++) {
+                const call = toolCalls[i];
 
+                // Add pending step
+                // Ideally we get the index from the state, but since setState is async, we can just rely on the loop index + accumulated steps if we were doing parallel.
+                // Since this loop is sequential await, the 'steps' array length will match 'i'.
+                addThinkingStep({
+                    tool: call.tool,
+                    description: `Executing ${call.tool}...`,
+                    status: 'pending',
+                    result: null
+                });
 
                 try {
                     const result = await executeTool(call.tool, call.params);
 
-                    // Auto-open file if created or read
+                    // Auto-open file if created or read (keeping existing logic)
                     if (['createTask', 'readTask', 'createPlan', 'readPlan', 'writeFile', 'readFile'].includes(call.tool)) {
                         let path = null;
                         if (result && result.path) path = result.path;
@@ -503,57 +592,72 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
                             }
                         }
 
-
                         if (path && onApplyCode) {
-                            // This sends an IPC command to open the file after it's been written
                             setTimeout(() => onApplyCode(`AesopIDE open file: ${path}`), 100);
                         }
                     }
 
-
-                    // TOOL RESULT SUPPRESSION
-                    let resultMsg;
-                    if (isFileOp) {
-                        resultMsg = {
-                            role: "tool_result",
-                            content: `Tool **'${call.tool}'** executed successfully.`,
-                            timestamp: new Date()
-                        };
-                    } else {
-                        resultMsg = {
-                            role: "tool_result",
-                            content: `Tool '${call.tool}' output:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``,
-                            timestamp: new Date()
-                        };
-                    }
-                    setMessages(prev => [...prev, resultMsg]);
-
-
-                    // 3. Send result back to AI (recursive)
-                    const followUpPrompt = `Tool '${call.tool}' returned:\n${JSON.stringify(result, null, 2)}\n\nPlease continue based on this result.`;
-                    const followUpReply = await askGemini(followUpPrompt, {
-                        systemPrompt: SYSTEM_PROMPT,
-                        fileContext,
-                        history: [...history, aiMessage, resultMsg], // Pass updated history to recursive call
-                        knowledgeContext: knowledgeContext, // Pass context to recursive call
-                        globalKnowledgeContext: globalKnowledgeContext // 🌟 NEW PROP to recursive call
+                    // Update step to success
+                    updateThinkingStep(i, {
+                        status: 'success',
+                        description: `Executed ${call.tool}`,
+                        result: result // Store result for display in the block
                     });
-                    const followUpMsg = {
-                        role: "assistant",
-                        content: followUpReply,
-                        timestamp: new Date()
-                    };
-                    setMessages(prev => [...prev, followUpMsg]);
 
+                    // Add to results for AI context
+                    toolResults.push({
+                        role: "tool_result",
+                        content: `Tool '${call.tool}' output:\n${JSON.stringify(result)}`, // Keep it compact for prompt
+                        timestamp: new Date()
+                    });
 
                 } catch (err) {
-                    const errorMsg = {
+                    // Update step to error
+                    updateThinkingStep(i, {
+                        status: 'error',
+                        description: `Failed: ${err.message}`,
+                        result: { error: err.message }
+                    });
+
+                    toolResults.push({
                         role: "tool_error",
                         content: `Tool '${call.tool}' failed: ${err.message}`,
                         timestamp: new Date()
-                    };
-                    setMessages(prev => [...prev, errorMsg]);
+                    });
                 }
+            }
+
+            finishThinking();
+
+            // 3. Send results back to AI (recursive)
+            // We combine all tool results into one prompt update
+            if (toolResults.length > 0) {
+                const followUpPrompt = `Tools executed. Results:\n${JSON.stringify(toolResults.map(r => r.content), null, 2)}\n\nPlease continue.`;
+
+                // Create placeholder for follow-up
+                const followUpPlaceholder = {
+                    role: "assistant",
+                    content: "",
+                    timestamp: new Date()
+                };
+                setMessages(prev => [...prev, followUpPlaceholder]);
+
+                const followUpReply = await askGeminiStream(followUpPrompt, {
+                    systemPrompt: SYSTEM_PROMPT,
+                    fileContext,
+                    history: [...history, { role: "assistant", content: reply }, ...toolResults], // Add all tool results to history
+                    knowledgeContext: knowledgeContext,
+                    globalKnowledgeContext: globalKnowledgeContext
+                }, (chunk, accumulated) => {
+                    setMessages((prev) => {
+                        const newMessages = [...prev];
+                        const lastMsg = newMessages[newMessages.length - 1];
+                        if (lastMsg && lastMsg.role === 'assistant') {
+                            lastMsg.content = accumulated;
+                        }
+                        return newMessages;
+                    });
+                });
             }
         }
 
@@ -610,29 +714,35 @@ export default function PromptPanel({ onClose, onApplyCode, onOpenCommand, activ
     // Replaced renderMessageContent logic with ReactMarkdown in renderMessage
 
     function renderMessage(message, index) {
-        const isUser = message.role === "user";
+        if (!message) return null;
+
+        // Custom rendering for "Thinking" blocks
+        if (message.role === 'thinking') {
+            return (
+                <ThinkingBlock
+                    key={index}
+                    steps={message.steps}
+                    isFinished={message.isFinished}
+                />
+            );
+        }
+
         const isTool = message.role === "tool";
         const isToolResult = message.role === "tool_result";
         const isToolError = message.role === "tool_error";
+        const isUser = message.role === "user";
+
+        // Cleanup deprecated legacy logic for raw tool display
+        // ...
 
         let roleLabel = "🤖 Assistant";
         if (isUser) roleLabel = "👤 You";
-        if (isTool) roleLabel = "🛠️ Tool";
         if (isToolResult) roleLabel = "📝 Result";
         if (isToolError) roleLabel = "⚠️ Error";
+        if (isTool) roleLabel = "🛠️ Tool";
 
-        // Use a concise message for tool actions that don't need raw content exposed
+        // Define displayContent to fix reference error
         let displayContent = message.content;
-        if (isToolResult && displayContent.includes('Tool **')) {
-            // This handles the generic suppressed message
-        } else if (isToolResult && displayContent.includes('Tool ')) {
-            // This attempts to clean up the content for better display in the log
-            displayContent = displayContent.replace(/Tool '.*?' output:\n```json\n/, '').replace(/\n```/g, '');
-            if (displayContent.length > 200) {
-                displayContent = displayContent.substring(0, 200) + '... (truncated JSON)';
-            }
-        }
-
 
         const messageClass = `message ${isUser ?
             "message-user" :

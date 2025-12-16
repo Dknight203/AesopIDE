@@ -694,6 +694,60 @@ function registerIpcHandlers() {
         }
     });
 
+    // ---------------------------------------------------------------------------
+    // PHASE 8.1: STREAMING PROMPT
+    // ---------------------------------------------------------------------------
+    ipcMain.on("gemini:stream", async (event, payload) => {
+        const streamId = payload.streamId || 'default';
+        try {
+            const model = getGeminiModel();
+            const { prompt: userPrompt, systemPrompt = "", fileContext = null, cursor = null, history = [], knowledgeContext = "", globalKnowledgeContext = "", enableSearch = false } = payload;
+
+            const parts = [];
+            if (systemPrompt) parts.push({ text: systemPrompt + "\n\n" });
+            if (globalKnowledgeContext) parts.push({ text: `## GLOBAL INSIGHTS\n${globalKnowledgeContext}\n\n` });
+            if (knowledgeContext) parts.push({ text: `## PROJECT KNOWLEDGE\n${knowledgeContext}\n\n` });
+            if (fileContext) parts.push({ text: "Project context:\n" + fileContext + "\n\n" });
+            if (cursor) parts.push({ text: "Cursor context:\n" + cursor + "\n\n" });
+            parts.push({ text: userPrompt });
+
+            const contents = [];
+            if (history && history.length > 0) {
+                for (const msg of history) {
+                    if (msg.role === 'user' || msg.role === 'assistant') {
+                        contents.push({
+                            role: msg.role === 'assistant' ? 'model' : 'user',
+                            parts: [{ text: msg.content }]
+                        });
+                    }
+                }
+            }
+            contents.push({ role: "user", parts });
+
+            const tools = [];
+            if (enableSearch) {
+                tools.push({ googleSearch: {} });
+            }
+
+            const requestConfig = { contents };
+            if (tools.length > 0) requestConfig.tools = tools;
+
+            const result = await model.generateContentStream(requestConfig);
+
+            for await (const chunk of result.stream) {
+                const chunkText = chunk.text();
+                event.sender.send('gemini:stream:chunk', { streamId, text: chunkText });
+            }
+
+            event.sender.send('gemini:stream:done', { streamId });
+
+        } catch (err) {
+            console.error("[AesopIDE gemini:stream error]", err);
+            event.sender.send('gemini:stream:error', { streamId, error: err.message || String(err) });
+        }
+    });
+
+
     ipcMain.handle("fs:deleteFile", async (event, targetPath) => {
         try {
             if (!targetPath) {

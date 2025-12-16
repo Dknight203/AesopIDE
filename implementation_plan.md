@@ -1079,6 +1079,41 @@ UI for model selection:
 5. Request a file edit and verify tool calling works
 6. Check status bar shows "🆓 Local" instead of cost estimate
 
+
+---
+
+## Phase 8: Chat Parity & Polish 🆕
+**Status:** ✅ Partially Completed
+**Goal:** Achieve "Antigravity-level" polish and feature parity for the chat interface.
+
+### Overview
+This phase bridges the gap between the current request-response chat and a modern, streaming, agentic interface. It introduces streaming responses, optimistic UI updates, and a dedicated "Task Mode" for complex operations.
+
+### Proposed Changes
+
+#### Phase 8.1: Streaming Response Engine ✅ COMPLETED
+**Goal:** Eliminate "blocking" feel. Response must start rendering < 200ms.
+- **Backend:** Update `ipcHandlers.js` to support `gemini:stream` channel.
+- **Frontend:** Refactor `useGemini` hook / `gemini.js` to handle `ondata` events.
+- **UI:** Render token-by-token in `PromptPanel.jsx`.
+
+#### Phase 8.2: The "Thinking" UI Protocol ✅ COMPLETED
+**Goal:** Hide raw tool logs and show "processing" states.
+- **Component:** Create `<ThoughtChain />` to group tool calls.
+- **Visuals:** Collapsible "Thinking..." blocks (like ChatGPT).
+- **Tool Output:** Render complex JSON results in a readable, collapsible view.
+
+#### Phase 8.3: Task Mode UI
+**Goal:** Separate "chatting" from "working".
+- **Sidebar:** Add toggle for `Chat` vs `Task`.
+- **Task View:** Render `task.md` as a live, interactive checklist.
+- **Artifacts:** Show `implementation_plan.md` and other artifacts in a dedicated panel, not just as file tabs.
+
+#### Verification Plan
+- **Streaming:** Verify "time to first token" is under 500ms.
+- **Visuals:** Confirm no "jank" when tool calls appear/disappear.
+- **Task Mode:** Verify state persists when switching tabs.
+
 ---
 
 ## Phase 19: Comprehensive Tool Framework 🆕
@@ -1482,7 +1517,7 @@ Steps:
 
 ### Previously Planned Phases:
 - ✅ Phase 7.5: Electron Best Practices (ErrorBoundary, IPC Schema, Workspace State)
-- 📋 Phase 8: Monaco Editor + VSCode Task Runner + Self-Correction
+- 📋 Phase 8: Chat Parity & Polish (Streaming, Artifacts, Task Mode)
 - 📋 Phase 9: Automated Plan Execution
 - 📋 Phase 10: Supabase/Cloud Context Ingestion
 - 📋 Phase 11: Architectural Guardrails

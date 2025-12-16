@@ -30,6 +30,15 @@ contextBridge.exposeInMainWorld("aesop", {
     // -----------------------------------------------------------
     prompt: {
         send: (payload, options) => ipcRenderer.invoke("prompt:send", payload, options),
+        stream: (payload) => ipcRenderer.send("gemini:stream", payload),
+        onStreamChunk: (callback) => ipcRenderer.on("gemini:stream:chunk", (event, ...args) => callback(...args)),
+        onStreamDone: (callback) => ipcRenderer.on("gemini:stream:done", (event, ...args) => callback(...args)),
+        onStreamError: (callback) => ipcRenderer.on("gemini:stream:error", (event, ...args) => callback(...args)),
+        removeStreamListeners: () => {
+            ipcRenderer.removeAllListeners("gemini:stream:chunk");
+            ipcRenderer.removeAllListeners("gemini:stream:done");
+            ipcRenderer.removeAllListeners("gemini:stream:error");
+        }
     },
 
     // -----------------------------------------------------------

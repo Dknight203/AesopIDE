@@ -23,6 +23,10 @@ export const IPC_CHANNELS = {
 
     // AI/Prompt operations
     PROMPT_SEND: 'prompt:send',
+    PROMPT_STREAM: 'gemini:stream',
+    PROMPT_STREAM_CHUNK: 'gemini:stream:chunk',
+    PROMPT_STREAM_DONE: 'gemini:stream:done',
+    PROMPT_STREAM_ERROR: 'gemini:stream:error',
 
     // Conversation history
     HISTORY_SAVE: 'history:save',
