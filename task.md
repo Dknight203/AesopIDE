@@ -14,7 +14,7 @@
 - ✅ Phase 6.1-6.2: **RAG Infrastructure** (Document Ingestion & Developer Library Query)
 - ✅ Phase 6.4: Agent Orchestration UI (`AgentManager.jsx` with task queue)
 - ✅ Phase 6.5: Rich Artifacts (`Mermaid.jsx`, markdown rendering)
-- ✅ Phase 7: Asynchronous Task Management (`TaskQueue` with priorities, dependencies)
+- ✅ Phase 7: Asynchronous Task Management (`TaskQueue` with priorities, dependencies, **Web Worker**)
 - ✅ Phase 7.5: Electron Best Practices (`ErrorBoundary.jsx`, `ipcSchema.js`, `WorkspaceState`)
 - ✅ Phase 8: Monaco Editor + VSCode Task Runner + Self-Correction
 
