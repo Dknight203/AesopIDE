@@ -1,0 +1,1901 @@
+# AesopIDE Comprehensive Implementation Plan
+
+**Goal:** Build a fully autonomous AI coding agent that can **replace Antigravity/Google One AI subscription ($20/month)**, leveraging local LLMs and the byLLM/RAG infrastructure for intelligent, cost-free AI assistance.
+
+---
+
+## Current Status
+
+**Completed Phases:**
+- ✅ Phase 2: Core File Tools
+- ✅ Phase 3.1-3.4: Task/Plan Management, Multi-Step Execution
+- ✅ Phase 4.2: Project & Global Memory
+- ✅ Phase 5.1-5.3: Git Diff/Patch, Testing, Linting
+- ✅ Phase 6.1-6.2: **RAG Infrastructure** (Document Ingestion & Developer Library Query)
+- ✅ Phase 6.4: Agent Orchestration UI (`AgentManager.jsx` with task queue)
+- ✅ Phase 6.5: Rich Artifacts (`Mermaid.jsx`, markdown rendering)
+- ✅ Phase 7: Asynchronous Task Management (`TaskQueue` with priorities, dependencies)
+- ✅ Phase 7.5: Electron Best Practices (`ErrorBoundary.jsx`, `ipcSchema.js`, `WorkspaceState`)
+- ✅ Phase 8: Monaco Editor + VSCode Task Runner + Self-Correction
+
+**Pending Phases (Antigravity Parity):**
+- 📋 Phase 9: Automated Plan Execution
+- 📋 Phase 10: Supabase/Cloud Context Ingestion
+- 📋 Phase 11: Architectural Guardrails
+- 📋 Phase 12: Visual QA/UX Testing (Browser Automation)
+- 📋 Phase 13: Artifact Generation & Display
+- 📋 Phase 14: Autonomous Test Integration
+- 📋 Phase 16: Live Web Search & Auto-Ingestion
+- 📋 Phase 17: Extension System + MCP + Checkpoints
+- 🆕 Phase 18: **Local LLM Support** (Ollama/LMStudio) - $0 AI
+- 🆕 Phase 19: **Comprehensive Tool Framework** (40+ tools)
+- 🆕 Phase 20: **Agentic Loop Engine** (plan-execute-verify-backtrack)
+- 🆕 Phase 21: **Context Window Management** (summarization)
+- 🆕 Phase 22: **Vision/Image Analysis** (screenshot debugging)
+- 🆕 Phase 23: **Multi-Agent Orchestration** (sub-agents)
+
+---
+
+## Phase 7.5: Electron Best Practices ✅ COMPLETED
+**Status:** ✅ Implemented - December 2024
+
+### Overview
+Apply production-ready patterns from electron-react-boilerplate for stability and maintainability.
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/components/ErrorBoundary.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/ErrorBoundary.jsx)
+React error boundary for crash protection:
+- Catch and display React errors gracefully
+- Log errors to console and file
+- Provide reload button for recovery
+- Prevent full IDE crashes from component errors
+
+```javascript
+export default class ErrorBoundary extends React.Component {
+    state = { hasError: false, error: null };
+    
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+    
+    componentDidCatch(error, errorInfo) {
+        console.error('React Error:', error, errorInfo);
+        window.aesop.logger?.error('Renderer crash', { error, errorInfo });
+    }
+    
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="error-boundary">
+                    <h1>🚨 Something went wrong</h1>
+                    <pre>{this.state.error?.toString()}</pre>
+                    <button onClick={() => window.location.reload()}>
+                        Reload IDE
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+```
+
+#### [MODIFY] [src/renderer/index.jsx](file:///c:/DevApps/AesopIDE/src/renderer/index.jsx)
+Wrap App with ErrorBoundary:
+```javascript
+import ErrorBoundary from './components/ErrorBoundary';
+
+root.render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
+```
+
+#### [NEW] [preload/ipcSchema.js](file:///c:/DevApps/AesopIDE/preload/ipcSchema.js)
+IPC channel validation schema:
+- Define all IPC channels in one place
+- Prevent typos in channel names
+- Document IPC API surface
+- Enable type-safe IPC calls
+
+```javascript
+export const IPC_CHANNELS = {
+  FS_READ: 'fs:read',
+  FS_WRITE: 'fs:write',
+  PROMPT_SEND: 'prompt:send',
+  RAG_QUERY: 'rag:query',
+  TERMINAL_EXEC: 'terminal:exec',
+  GIT_STATUS: 'git:status'
+};
+
+export function validateChannel(channel) {
+  if (!Object.values(IPC_CHANNELS).includes(channel)) {
+    throw new Error(`Invalid IPC channel: ${channel}`);
+  }
+}
+```
+
+#### [NEW] [src/renderer/lib/workspace/state.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/workspace/state.js)
+Workspace state persistence (inspired by VSCode memento):
+- Save/restore open tabs across sessions
+- Persist panel sizes and layout
+- Remember scroll positions
+- Store expanded folder states
+
+```javascript
+export class WorkspaceState {
+    constructor(projectPath) {
+        this.stateFile = `${projectPath}/.aesop/workspace.json`;
+    }
+
+    async save(state) {
+        await window.aesop.fs.writeFile(
+            this.stateFile,
+            JSON.stringify(state, null, 2)
+        );
+    }
+
+    async load() {
+        try {
+            const content = await window.aesop.fs.readFile(this.stateFile);
+            return JSON.parse(content);
+        } catch {
+            return {
+                openTabs: [],
+                activeTab: null,
+                sidebarWidth: 250,
+                terminalHeight: 200
+            };
+        }
+    }
+}
+```
+
+#### [MODIFY] [src/renderer/App.jsx](file:///c:/DevApps/AesopIDE/src/renderer/App.jsx)
+Integrate workspace state persistence:
+- Load workspace state on mount
+- Auto-save state every 5 seconds
+- Restore tabs, layout, and scroll positions
+
+### Verification Plan
+
+#### Manual Verification
+1. **Error Boundary**: Throw test error in component, verify boundary catches it
+2. **Workspace State**: Open files, resize panels, close IDE, reopen - verify state restored
+3. **IPC Schema**: Check console for validation errors on startup
+
+---
+
+## Phase 7: Asynchronous Task Management
+**byLLM Integration:** ✅ Uses RAG to query task orchestration best practices
+
+### Overview
+Enable parallel agent workflows without UI blocking, inspired by Cline's task execution architecture.
+
+### User Review Required
+
+> [!IMPORTANT]
+> This implements concurrent task execution which may increase API costs significantly. Multiple agents running simultaneously will make parallel API calls.
+
+> [!WARNING]
+> Web Workers will run in separate threads - debugging may be more complex. Ensure proper error handling and logging.
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/tasks/taskQueue.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tasks/taskQueue.js)
+Implement task queue with priority management:
+- Task states: pending, running, paused, complete, failed
+- Priority levels (high, normal, low)
+- Dependency resolution (task B waits for task A)
+- Max concurrent tasks limit (default: 3)
+
+#### [NEW] [src/renderer/workers/executionWorker.js](file:///c:/DevApps/AesopIDE/src/renderer/workers/executionWorker.js)
+Web Worker for heavy computation:
+- Execute tool chains without blocking main thread
+- Handle large file parsing/processing
+- Perform vector similarity calculations
+
+#### [MODIFY] [src/renderer/lib/tasks/manager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tasks/manager.js)
+Enhance `executeChain()` to support concurrency:
+- Check if steps can run in parallel (no dependencies)
+- Use `Promise.allSettled()` for concurrent execution
+- Track individual step failures without halting entire chain
+- Add task persistence for long-running sessions
+
+#### [MODIFY] [src/renderer/components/AgentManager.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/AgentManager.jsx)
+Update UI to show multiple concurrent tasks:
+- Display task queue with status indicators
+- Show progress bars for each active task
+- Add per-task cancel/pause buttons
+- Implement task priority drag-and-drop reordering
+
+### Verification Plan
+
+#### Automated Tests
+- Create test file: `src/renderer/lib/tasks/__tests__/taskQueue.test.js`
+- Test cases:
+  - Add multiple tasks to queue
+  - Verify priority ordering
+  - Test dependency resolution
+  - Validate concurrent execution limit
+- Run: `npm test -- taskQueue.test.js`
+
+#### Manual Verification
+1. Start AesopIDE and open AgentManager
+2. Request AI to perform 3 file operations simultaneously
+3. Verify all 3 tasks appear in queue and execute concurrently
+4. Test pause functionality - verify other tasks continue running
+5. Check UI updates in real-time for all tasks
+
+---
+
+## Phase 8: Intelligent Tool Execution Layer ✅ COMPLETED
+**Status:** ✅ Implemented - December 2024
+**byLLM Integration:** ✅ Retrieves error resolution strategies from developer library
+
+### Overview
+Upgrade editor to Monaco (VSCode's editor), implement VSCode-style task runner for terminal commands, and enable AI self-correction loops.
+
+### User Review Required
+
+> [!IMPORTANT]
+> Monaco Editor replaces the current textarea. This is a **non-breaking change** - same props interface, but adds professional IDE features (syntax highlighting, IntelliSense, diff viewer).
+
+### Proposed Changes
+
+#### [MODIFY] [package.json](file:///c:/DevApps/AesopIDE/package.json)
+Add Monaco Editor dependency:
+```json
+{
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0"
+  }
+}
+```
+
+#### [MODIFY] [src/renderer/components/Editor.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/Editor.jsx)
+Replace textarea with Monaco Editor:
+- Import `@monaco-editor/react`
+- Detect language from file extension (js, ts, py, json, etc.)
+- Enable syntax highlighting and IntelliSense
+- Add custom keybindings (Ctrl+S for save)
+- Support `automaticLayout: true` for panel resizing
+- Preserve existing copy/paste functionality (enhanced by Monaco)
+
+**Key Features:**
+- Multi-cursor editing
+- Built-in diff viewer (for Phase 5 git integration)
+- Inline error markers (for terminal feedback)
+- Minimap navigation
+- Find/replace with regex
+
+**Implementation:**
+```javascript
+import MonacoEditor from "@monaco-editor/react";
+
+export default function Editor({ activeTab, onChangeContent, onSave }) {
+    const editorRef = useRef(null);
+
+    function handleEditorDidMount(editor, monaco) {
+        editorRef.current = editor;
+        
+        // Preserve Ctrl+S save
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+            onSave();
+        });
+
+        // Add AI context query action
+        editor.addAction({
+            id: 'aesop-ai-assist',
+            label: 'Ask AI About Selection',
+            keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyA],
+            run: (ed) => {
+                const selection = ed.getModel().getValueInRange(ed.getSelection());
+                window.aesop.events.emit('ai:contextQuery', { code: selection });
+            }
+        });
+    }
+
+    const getLanguage = (path) => {
+        const ext = path.split('.').pop();
+        const map = { 
+            js: 'javascript', jsx: 'javascript',
+            ts: 'typescript', tsx: 'typescript',
+            py: 'python', json: 'json', md: 'markdown',
+            css: 'css', html: 'html', sql: 'sql'
+        };
+        return map[ext] || 'plaintext';
+    };
+
+    return (
+        <MonacoEditor
+            height="100%"
+            language={getLanguage(activeTab.path)}
+            value={activeTab.content || ""}
+            onChange={onChangeContent}
+            theme="vs-dark"
+            options={{
+                minimap: { enabled: true },
+                fontSize: 14,
+                automaticLayout: true,  // Responds to panel resize!
+                tabSize: 2
+            }}
+            onMount={handleEditorDidMount}
+        />
+    );
+}
+```
+
+#### [NEW] [src/renderer/lib/terminal/taskRunner.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/terminal/taskRunner.js)
+VSCode-style task runner for structured command execution:
+- Auto-discover npm scripts from package.json
+- Define problem matchers for TypeScript, ESLint, Jest errors
+- Execute tasks with structured error parsing
+- Return parsed errors to AI for self-correction
+
+**Implementation:**
+```javascript
+export class TaskRunner {
+    constructor() {
+        this.tasks = new Map();
+    }
+
+    registerTask(name, config) {
+        this.tasks.set(name, {
+            command: config.command,
+            cwd: config.cwd,
+            problemMatcher: config.problemMatcher // Regex for error parsing
+        });
+    }
+
+    async discoverScripts(projectPath) {
+        const pkg = JSON.parse(await window.aesop.fs.readFile(`${projectPath}/package.json`));
+        
+        for (const [name, script] of Object.entries(pkg.scripts || {})) {
+            this.registerTask(`npm:${name}`, {
+                command: `npm run ${name}`,
+                cwd: projectPath,
+                problemMatcher: this.detectProblemMatcher(script)
+            });
+        }
+    }
+
+    detectProblemMatcher(script) {
+        if (script.includes('tsc')) return /error TS(\d+): (.+)/;
+        if (script.includes('eslint')) return /(\d+):(\d+)\s+error\s+(.+)/;
+        if (script.includes('jest')) return /● (.+)/;
+        return null;
+    }
+
+    async executeTask(name) {
+        const task = this.tasks.get(name);
+        const result = await window.aesop.terminal.exec(task.command, { cwd: task.cwd });
+        
+        // Parse errors using problem matcher
+        if (task.problemMatcher && result.stderr) {
+            const matches = result.stderr.match(task.problemMatcher);
+            if (matches) {
+                return { ...result, parsedErrors: matches };
+            }
+        }
+        
+        return result;
+    }
+}
+```
+
+#### [NEW] [src/renderer/lib/tools/terminalBridge.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tools/terminalBridge.js)
+Command result parser and feedback loop:
+- Use TaskRunner for structured execution
+- Parse compilation errors (TypeScript, ESLint)
+- Identify test failures (Jest/Vitest)
+- Return structured error objects to AI
+
+#### [MODIFY] [src/renderer/lib/ai/toolParser.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/toolParser.js)
+Extend to handle terminal commands:
+- Add `executeTerminalCommand` tool
+- Use TaskRunner for execution
+- Implement command validation
+- Add retry logic with exponential backoff
+
+#### [NEW] [src/renderer/lib/ai/selfCorrection.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/selfCorrection.js)
+Self-correction loop implementation:
+- Analyze parsed errors from TaskRunner
+- **Query RAG**: Retrieve debugging strategies
+- Generate fix attempts
+- Re-execute via TaskRunner
+- Escalate to user after max retries
+
+### Verification Plan
+
+#### Manual Verification (Monaco Editor)
+1. Run `npm install @monaco-editor/react`
+2. Run `npm run dev`
+3. Open a TypeScript file - verify syntax highlighting works
+4. Test Ctrl+C/V/X - verify copy/paste works
+5. Resize panels - verify editor auto-adjusts (no breaking)
+6. Test Ctrl+S - verify save still works
+
+#### Manual Verification (Task Runner)
+1. Ask AI: "What npm scripts are available?"
+2. Verify AI lists discovered tasks
+3. Introduce TypeScript error in a file
+4. Ask AI: "Run npm run build and fix errors"
+5. Verify AI:
+   - Executes build task
+   - Parses TypeScript error
+   - Suggests or applies fix
+   - Re-runs build to confirm
+
+---
+
+## Phase 9: Automated Plan Execution (Pending)
+**Status:** 📋 Planned - Not yet implemented
+**byLLM Integration:** ✅ Queries git workflow best practices and commit conventions
+
+### Overview
+Transform approved implementation plans into executed code with automatic git commits (building on existing planner.js foundation).
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/planning/planExecutor.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/planning/planExecutor.js)
+Execution engine for implementation plans:
+- Parse `implementation_plan.md` into actionable steps
+- Map plan sections to tool calls (readFile, writeFile, runCommand, etc.)
+- Execute steps sequentially with checkpoints
+- Handle execution failures with rollback support
+
+#### [MODIFY] [src/renderer/lib/git.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/git.js)
+Add workflow automation functions:
+- `createFeatureBranch(planTitle)`: Auto-create branch from plan name
+- `commitStep(stepDescription)`: Commit after each completed step
+- `generateCommitMessage(fileChanges)`: Use AI + **RAG best practices** for commit messages
+- `rollbackToCheckpoint(checkpointId)`: Revert to previous state on failure
+
+#### [MODIFY] [src/renderer/lib/tasks/manager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tasks/manager.js)
+Integrate planner with execution chain:
+- Add `executePlan(projectPath)` function
+- Read current plan status from `planner.js`
+- Execute only approved plans
+- Track progress and update task.md status markers
+
+#### [MODIFY] [src/renderer/components/PlanReview.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PlanReview.jsx)
+Add execution controls:
+- "Execute Plan" button (only enabled when plan approved)
+- Real-time execution progress display
+- Show current step being executed
+- Display git commit history during execution
+
+### Verification Plan
+
+#### Automated Tests
+- Create: `src/renderer/lib/planning/__tests__/planExecutor.test.js`
+- Test plan parsing into steps
+- Verify tool call mapping accuracy
+- Test checkpoint/rollback functionality
+- Run: `npm test -- planExecutor.test.js`
+
+#### Manual Verification
+1. Create a simple implementation plan (e.g., "Add console.log to App.jsx")
+2. Approve the plan in PlanReview UI
+3. Click "Execute Plan" button
+4. Verify:
+   - Feature branch created automatically
+   - File is modified as planned
+   - Git commit created with descriptive message
+5. Check `.aesop/task.md` updated with step completion status
+6. Run `git log` to verify commit message quality
+
+---
+
+## Phase 10: Supabase/Cloud Context Ingestion (Pending)
+**Status:** 📋 Planned - Not yet implemented
+**byLLM Integration:** ✅✅ CORE FEATURE - Uses RAG infrastructure to ingest schemas
+
+### Overview
+Understand external architectures by ingesting Supabase schemas and Edge Functions from DualPilot project.
+
+### User Review Required
+
+> [!IMPORTANT]
+> This feature will scan and ingest external schema files (e.g., Supabase migrations, Edge Functions) from subdirectories of your currently loaded project. Ensure the project directory is correctly set via "Open Folder" before using schema ingestion.
+
+### Proposed Changes
+
+#### [MODIFY] [src/renderer/lib/codebase/context.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/codebase/context.js)
+Augment context builder with external schema loading:
+- Add `loadExternalSchemas(projectPath)` function
+- Scan `${projectPath}/supabase/migrations/*.sql`
+- Parse SQL to extract table structures, columns, RLS policies
+- Return schema as structured JSON
+
+#### [NEW] [src/renderer/lib/ingestion/schemaIngestion.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ingestion/schemaIngestion.js)
+Schema parser and ingestion:
+- SQL parser for Supabase migration files
+- Extract table relationships (foreign keys)
+- Identify RLS policies and permissions
+- **Use existing RAG infrastructure**: Call `window.aesop.ingestion.document()` to chunk and embed schemas
+- TypeScript/JavaScript parser for Edge Functions
+- Extract function signatures, parameters, return types
+
+#### [NEW] [ipcHandlers.js → ingestion:scanExternalSchemas](file:///c:/DevApps/AesopIDE/ipcHandlers.js)
+IPC handler for scanning external schema directories:
+- Use current project root (from `currentRoot` variable)
+- Scan for common schema directories: `${projectRoot}/supabase/migrations/`, `${projectRoot}/prisma/`, `${projectRoot}/db/`
+- Scan for serverless function directories: `${projectRoot}/supabase/functions/`, `${projectRoot}/netlify/functions/`, `${projectRoot}/api/`
+- Return file contents to renderer for processing
+
+#### [MODIFY] [src/renderer/lib/ai/systemPrompt.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/systemPrompt.js)
+Add schema context injection:
+- Document new context types (database schema, Edge Functions)
+- Add instructions for using schema context when working with backend
+- Update example prompts to show schema-aware responses
+
+#### [NEW] [src/renderer/components/SchemaViewer.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/SchemaViewer.jsx)
+UI for browsing ingested schemas:
+- Display table list with column details
+- Show relationships diagram (foreign keys)
+- List Edge Functions with signatures
+- Allow manual re-ingestion
+
+### Verification Plan
+
+#### Automated Tests
+- Create: `src/renderer/lib/ingestion/__tests__/schemaIngestion.test.js`
+- Test SQL parsing with sample migration file
+- Verify TypeScript function signature extraction
+- Validate schema JSON structure
+- Run: `npm test -- schemaIngestion.test.js`
+
+#### Manual Verification
+1. Open AesopIDE and load a project with database schemas (e.g., a project using Supabase, Prisma, or traditional SQL migrations)
+2. Run command to ingest schemas (add UI button or command palette entry: "Ingest Project Schemas")
+3. Verify in console that migration/schema files are discovered and read successfully
+4. Check Supabase database that schema chunks are stored in `aesopide_developer_library` table
+5. Ask AI: "What tables exist in this project's database?"
+6. Verify AI response includes tables from ingested schemas
+7. If project has serverless functions, ask: "What does the [function-name] function do?"
+8. Verify AI can describe the function based on ingested code
+
+---
+
+## Phase 11: Architectural Guardrails (Pending)
+**Status:** 📋 Planned - Not yet implemented
+**byLLM Integration:** ✅ Stores common architectural patterns in RAG
+
+### Overview
+Dynamically enforce project-specific coding standards through `.clinerules` and custom configuration files (inspired by Cline's extensibility).
+
+### Proposed Changes
+
+#### [MODIFY] [src/renderer/lib/ai/systemPrompt.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/systemPrompt.js)
+Dynamic prompt injection system:
+- Convert from static string to function: `buildSystemPrompt(projectPath)`
+- Read `.clinerules` or `AGENTS.md` from project root
+- Parse rule definitions (format TBD: YAML, JSON, or markdown)
+- Inject rules into prompt before each AI request
+- Support rule priorities and overrides
+
+#### [NEW] [src/renderer/lib/rules/ruleEngine.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/rules/ruleEngine.js)
+Configuration file parser:
+- Support `.clinerules` format (YAML with rule sections)
+- Parse rule categories: naming conventions, file structure, code patterns
+- Conditional rules based on file type (e.g., "*.tsx must use functional components")
+- Validation rules (e.g., "all functions must have JSDoc comments")
+
+#### [NEW] [.clinerules](file:///c:/DevApps/AesopIDE/.clinerules)
+Example AesopIDE project rules file:
+```yaml
+version: 1.0
+rules:
+  naming:
+    - components: PascalCase (e.g., AgentManager.jsx)
+    - utilities: camelCase (e.g., toolParser.js)
+    - constants: UPPER_SNAKE_CASE
+  
+  structure:
+    - new_components: src/renderer/components/
+    - new_utilities: src/renderer/lib/
+    - tests: __tests__ subdirectories
+  
+  patterns:
+    - ipc_handlers: Always return { ok: boolean, ... }
+    - react_components: Use functional components with hooks
+    - error_handling: Always wrap IPC calls in try-catch
+
+  documentation:
+    - exported_functions: Require JSDoc with @param and @returns
+```
+
+#### [MODIFY] [src/renderer/lib/tools/framework.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tools/framework.js)
+Add rule validation before tool execution:
+- Check rules before writeFile (enforce naming, patterns)
+- Validate structure before newFile/newFolder
+- Auto-suggest fixes for rule violations
+- **Query RAG**: Find similar project patterns when rules are ambiguous
+
+### Verification Plan
+
+#### Automated Tests
+- Create: `src/renderer/lib/rules/__tests__/ruleEngine.test.js`
+- Test parsing of sample `.clinerules` file
+- Verify rule priority resolution
+- Test conditional rule application
+- Run: `npm test -- ruleEngine.test.js`
+
+#### Manual Verification
+1. Create `.clinerules` in AesopIDE root with test rule: "All new components must start with 'Test'"
+2. Ask AI to create a new component called "MyComponent.jsx"
+3. Verify AI either:
+   - Names it "TestMyComponent.jsx" (following rule), OR
+   - Warns about rule violation and asks for permission to override
+4. Remove the rule and verify AI reverts to normal behavior
+
+---
+
+## Phase 12: Visual QA/UX Testing (Pending)
+**Status:** 📋 Planned - Not yet implemented
+**byLLM Integration:** ✅ Queries testing best practices and common UI patterns
+
+### Overview
+Implement browser automation for visual regression testing and interactive debugging (inspired by Cline's Computer Use capability).
+
+### User Review Required
+
+> [!CAUTION]
+> Puppeteer/Playwright will launch real browser instances with automation. This may trigger anti-bot detection on some sites. Use responsibly and test only on localhost or owned domains.
+
+### Proposed Changes
+
+#### [NEW] [ipcHandlers.js → browser:launch](file:///c:/DevApps/AesopIDE/ipcHandlers.js)
+Browser automation IPC handlers:
+- Install Puppeteer in main process dependencies
+- `browser:launch(url, options)`: Launch browser instance (headless/headed mode)
+- `browser:screenshot(viewport)`: Capture full page or element screenshot
+- `browser:click(selector)`: Click element by CSS selector
+- `browser:type(selector, text)`: Type text into input field
+- `browser:evaluate(script)`: Execute JavaScript in browser context
+- `browser:close()`: Clean up browser instance
+
+#### [NEW] [src/renderer/lib/testing/browserController.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/testing/browserController.js)
+Renderer-side browser control wrapper:
+- Abstract Puppeteer API for AI agent use
+- Record browser interaction sessions as video (mp4 format)
+- Capture console logs and network requests
+- Implement visual regression testing (compare screenshots)
+
+#### [MODIFY] [src/renderer/lib/tools/framework.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tools/framework.js)
+Add browser testing tools:
+- `launchBrowser(url)`: Start automated browser session
+- `testElement(selector, expected)`: Verify element state
+- `captureScreenshot(name)`: Save screenshot to artifacts
+- `runVisualTest(baseline)`: Compare current vs baseline screenshot
+
+#### [NEW] [src/renderer/lib/testing/visualRegression.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/testing/visualRegression.js)
+Visual regression testing logic:
+- Pixel-by-pixel image comparison
+- Generate diff images highlighting changes
+- Manage baseline screenshot library
+- Report visual regression results
+
+### Verification Plan
+
+#### Automated Tests
+- Create: `src/renderer/lib/testing/__tests__/browserController.test.js`
+- Mock Puppeteer API
+- Test screenshot capture workflow
+- Verify cleanup on errors
+- Run: `npm test -- browserController.test.js`
+
+#### Manual Verification
+1. Run DualPilot locally: `cd c:\DevApps\dualpilot && npm run dev`
+2. In AesopIDE, ask AI: "Test the DualPilot homepage at http://localhost:3000"
+3. Verify AI:
+   - Launches browser automatically
+   - Navigates to URL
+   - Captures screenshot
+   - Reports page load success
+4. Check artifacts directory for saved screenshot
+5. Ask AI: "Click the login button and verify the modal appears"
+6. Verify AI can interact with page elements
+
+---
+
+## Phase 13: Artifact Generation & Display (Pending)
+**Status:** 📋 Planned - Not yet implemented
+**byLLM Integration:** ❌ No direct integration (infrastructure feature)
+
+### Overview
+Communicate progress through visual artifacts like screenshots, videos, and structured diffs (matching Antigravity/Cline's approach).
+
+### Proposed Changes
+
+#### [MODIFY] [src/renderer/components/AgentManager.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/AgentManager.jsx)
+Add artifact display section:
+- Screenshot gallery with lightbox view
+- Video player for session recordings (WebP/MP4 format)
+- Embedded diff viewer for code changes
+- Download/export buttons for artifacts
+
+#### [NEW] [src/renderer/lib/artifacts/generator.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/artifacts/generator.js)
+Artifact creation utilities:
+- `createWalkthrough(steps, screenshots)`: Generate walkthrough.md
+- `generateComparisonView(before, after)`: Create before/after artifact
+- `recordSession(taskId)`: Start/stop session recording
+- `exportArtifacts(taskId, format)`: Package artifacts for sharing
+
+#### [MODIFY] [src/renderer/components/PlanReview.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PlanReview.jsx)
+Display artifacts alongside plans:
+- Show execution screenshots inline
+- Embed code change diffs with syntax highlighting
+- Link to verification videos
+- Timeline view of artifacts created during execution
+
+#### [NEW] [src/renderer/styles/artifacts.css](file:///c:/DevApps/AesopIDE/src/renderer/styles/artifacts.css)
+Styling for artifact displays:
+- Carousel view for multiple screenshots
+- Video player controls
+- Diff viewer color scheme (green for additions, red for deletions)
+- Responsive layout for artifact gallery
+
+### Verification Plan
+
+#### Manual Verification (User-Assisted)
+1. Complete a task that generates artifacts (e.g., Phase 12 browser testing)
+2. Open AgentManager and navigate to completed task
+3. Verify artifacts section shows:
+   - Thumbnails of captured screenshots
+   - Playable video of test session (if recorded)
+   - Diff view of code changes made
+4. Click screenshot thumbnail to open lightbox view
+5. Click download button and verify artifact saves to disk
+6. Review generated `walkthrough.md` for completeness
+
+---
+
+## Phase 14: Autonomous Test Integration (Pending)
+**Status:** 📋 Planned - Not yet implemented
+**byLLM Integration:** ✅✅ Retrieves debugging patterns and test strategies from RAG
+
+### Overview
+Full TDD workflow with self-debugging loop (test → fail → fix → repeat).
+
+### Proposed Changes
+
+#### [MODIFY] [src/renderer/lib/tasks/manager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tasks/manager.js)
+Integrate `runTests()` into execution chain:
+- Add `verificationMode` flag to `executeChain()`
+- Automatically run tests after code changes
+- Parse test results for pass/fail status
+- Trigger self-correction on failures
+
+#### [NEW] [src/renderer/lib/testing/testAnalyzer.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/testing/testAnalyzer.js)
+Test result parser and failure analyzer:
+- Parse Jest/Vitest output (JSON format preferred)
+- Extract failed test names, error messages, stack traces
+- **Query RAG**: Retrieve debugging patterns for specific error types
+- Generate fix suggestions based on failure analysis
+- Track failure patterns for learning
+
+#### [NEW] [src/renderer/lib/testing/tddMode.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/testing/tddMode.js)
+Test-driven development workflow:
+- "Write tests first" mode toggle in UI
+- Generate test skeletons from requirements
+- Implement code to make tests pass
+- Refactor with continuous test validation
+- Red-Green-Refactor cycle automation
+
+#### [MODIFY] [src/renderer/lib/ai/selfCorrection.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/selfCorrection.js)
+Add test-specific self-correction:
+- Analyze test failure root causes
+- Attempt fixes (limited to 5 iterations)
+- Re-run tests after each fix attempt
+- Escalate to user if max iterations exceeded
+- Log all fix attempts for user review
+
+### Verification Plan
+
+#### Automated Tests (Self-Testing!)
+- Create: `src/renderer/lib/testing/__tests__/testAnalyzer.test.js`
+- Provide sample Jest failure output
+- Verify parsing extracts correct error info
+- Test fix suggestion generation
+- Run: `npm test -- testAnalyzer.test.js`
+
+#### Manual Verification (TDD Workflow)
+1. Enable TDD mode in AesopIDE settings
+2. Ask AI: "Create a function `add(a, b)` that adds two numbers"
+3. Verify AI:
+   - First writes test: `expect(add(1, 2)).toBe(3)`
+   - Then implements function
+   - Runs test to verify
+4. Introduce deliberate bug: "Make add function multiply instead"
+5. Verify AI:
+   - Runs tests automatically
+   - Detects failure
+   - Analyzes error message
+   - Fixes the function
+   - Re-runs tests until they pass
+
+---
+
+## Phase 16: Live Web Search & Auto-Ingestion (Pending)
+**Status:** 📋 Planned - Not yet implemented
+**byLLM Integration:** ✅✅ CORE FEATURE - Ingests search results into RAG
+
+### Overview
+Enable real-time documentation retrieval using Gemini's Google Search Grounding, with automatic ingestion of findings into the developer library.
+
+### Proposed Changes
+
+#### [MODIFY] [ipcHandlers.js → prompt:send](file:///c:/DevApps/AesopIDE/ipcHandlers.js)
+Enable Google Search Grounding in Gemini API calls:
+- Add `tools` configuration with `googleSearchRetrieval`
+- Enable grounding for specific query types (documentation, API references)
+- Extract grounded content from response metadata
+- Auto-ingest grounded sources into RAG
+
+```javascript
+// In prompt:send handler, add:
+const generationConfig = {
+  temperature: 0.7,
+  // ... other config
+};
+
+const tools = [];
+if (options.enableSearch) {
+  tools.push({
+    googleSearchRetrieval: {
+      dynamicRetrievalConfig: {
+        mode: "MODE_DYNAMIC",
+        dynamicThreshold: 0.3 // Only ground when confidence is low
+      }
+    }
+  });
+}
+
+const result = await model.generateContent({
+  contents,
+  generationConfig,
+  tools
+});
+
+// Extract and ingest grounded content
+if (result.groundingMetadata?.webSearchQueries) {
+  for (const query of result.groundingMetadata.webSearchQueries) {
+    // Auto-ingest search results
+    await ingestSearchResult(query);
+  }
+}
+```
+
+#### [NEW] [src/renderer/lib/search/liveSearch.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/search/liveSearch.js)
+Live search utilities:
+- `enableSearchForQuery(query)`: Determine if search should be enabled
+- `extractGroundingData(response)`: Parse grounding metadata
+- `ingestSearchResults(groundingData)`: Store findings in RAG
+- **Smart caching**: Check if topic already in RAG before enabling search
+
+#### [MODIFY] [src/renderer/lib/ai/systemPrompt.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/systemPrompt.js)
+Add search capabilities to system prompt:
+- Document when AI can trigger live search
+- Explain grounding citations in responses
+- Instruct AI to summarize and save important findings
+
+```markdown
+### Live Search (When Enabled)
+When you need current information not in your context or developer library:
+- Technical documentation (e.g., "React 19 features")
+- Library API references (e.g., "Supabase Edge Function syntax")
+- Breaking changes or deprecations
+- Latest best practices
+
+After receiving grounded results:
+1. Summarize key findings
+2. Important documentation will be automatically saved to developer library
+3. Future queries on same topic will use cached knowledge
+```
+
+#### [MODIFY] [src/renderer/components/PromptPanel.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PromptPanel.jsx)
+Add search toggle and grounding indicator:
+- Checkbox: "Enable live web search" (default: auto)
+- Display grounding citations when search is used
+- Show "Saved to library" indicator when content is ingested
+
+### Verification Plan
+
+#### Automated Tests
+- Create: `src/renderer/lib/search/__tests__/liveSearch.test.js`
+- Mock Gemini response with grounding metadata
+- Test search result parsing
+- Verify RAG ingestion triggered correctly
+- Run: `npm test -- liveSearch.test.js`
+
+#### Manual Verification
+1. Ask AI: "What are the new features in React 19?"
+2. Verify response includes grounded information with citations
+3. Check console logs show grounding metadata was received
+4. Verify Supabase `aesopide_developer_library` table has new entries for React 19 docs
+5. Ask follow-up: "Tell me more about React 19 Server Actions"
+6. Verify AI uses cached RAG knowledge (faster response, no new grounding)
+7. Toggle off "Enable live web search"
+8. Ask same question - verify AI uses only RAG, mentions if info might be outdated
+
+### Cost Considerations
+
+> [!IMPORTANT]
+> Google Search Grounding is **FREE** for Gemini 2.0 Flash but has **input token cost** for grounding data:
+> - Grounded content adds ~2-5K tokens per search
+> - At scale: ~$0.01-0.02 per grounded query
+> - Recommendation: Enable auto mode (only searches when RAG has low confidence)
+
+---
+
+## Phase 17: Cline Architecture Integration (Pending)
+**Status:** 📋 Planned - Not yet implemented
+**byLLM Integration:** ✅ Extensions can contribute RAG sources
+
+### Overview
+ Adopt proven patterns from Cline and Theia for MCP support, task checkpoints, and enhanced context management using a clean extension architecture.
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/extensions/extensionHost.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/extensions/extensionHost.js)
+Theia-inspired extension system for MCP servers and custom tools:
+- Register extensions with manifest-based configuration
+- Provide isolated extension contexts
+- Auto-activate based on events (e.g., project type detected)
+- Allow extensions to contribute tools, commands, and RAG sources
+
+#### [NEW] [extensions/dualpilot-tools/manifest.json](file:///c:/DevApps/AesopIDE/extensions/dualpilot-tools/manifest.json)
+Example extension manifest:
+```json
+{
+  "id": "dualpilot-tools",
+  "name": "DualPilot Integration",
+  "version": "1.0.0",
+  "activationEvents": ["onProject:dualpilot"],
+  "contributes": {
+    "tools": [
+      {
+        "name": "fetchDualPilotSites",
+        "description": "Fetch all sites from DualPilot Supabase"
+      }
+    ]
+  }
+}
+```
+
+#### [NEW] [src/renderer/lib/mcp/mcpClient.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/mcp/mcpClient.js)
+Model Context Protocol client implementation:
+- Connect to MCP servers
+- Discover available tools from servers
+- Execute server-provided tools
+- Handle streaming responses
+- **Integrate with Extension System**: MCP servers register as extensions
+
+#### [MODIFY] [src/renderer/lib/tasks/manager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tasks/manager.js)
+Add checkpoint system (inspired by Cline):
+- Save workspace state before each major step
+- Enable "Restore to Checkpoint" functionality
+- Support "Compare with Checkpoint" diff view
+- Implement "Restore Task and Workspace" vs "Restore Workspace Only"
+
+#### [MODIFY] [src/renderer/components/PromptPanel.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PromptPanel.jsx)
+Add context shortcuts (Cline-style):
+- `@url <url>`: Fetch and ingest URL content
+- `@file <path>`: Add file to context without AI approval
+- `@folder <path>`: Add entire folder to context
+- `@problems`: Inject workspace errors from linter
+
+### Verification Plan
+
+#### Manual Verification (Extension System)
+1. Create custom extension: "Create a tool that lists all DualPilot sites"
+2. Verify AI creates extension in `extensions/dualpilot-tools/`
+3. Test extension registration in AesopIDE
+4. Use the tool in a prompt: "List all sites in DualPilot"
+
+#### Manual Verification (Checkpoints)
+1. Make code changes to a file
+2. Create checkpoint via AgentManager
+3. Make more changes
+4. Click "Compare with Checkpoint" - verify diff shows correctly
+5. Click "Restore Checkpoint" - verify files revert
+
+#### Manual Verification (Context Shortcuts)
+1. Type `@file src/renderer/App.jsx` in prompt
+2. Verify file content added to context automatically
+3. Type `@url https://docs.example.com/api`
+4. Verify URL content fetched and added to context
+
+---
+
+## Phase 18: Local LLM Support (Ollama/LMStudio) 🆕
+**Status:** 📋 Planned - Critical for subscription-free operation
+**Goal:** Enable AesopIDE to use free, local language models instead of paid API
+
+### Overview
+Integrate local LLM backends (Ollama, LMStudio, llama.cpp) to eliminate API costs entirely. This is the **subscription-killer feature** - with a capable GPU, you pay $0 for AI assistance.
+
+### User Review Required
+
+> [!IMPORTANT]
+> Local LLMs require significant GPU resources. Recommended: 16GB+ VRAM for best models (Llama 3.1 70B). 8GB VRAM can run smaller models (Llama 3.1 8B, Mistral 7B).
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/ai/providers/ollama.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/providers/ollama.js)
+Ollama integration:
+- Connect to local Ollama server (http://localhost:11434)
+- List available models
+- Stream completions with tool calling format
+- Handle Ollama-specific prompt templates
+
+#### [NEW] [src/renderer/lib/ai/providers/lmstudio.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/providers/lmstudio.js)
+LMStudio integration:
+- Connect via OpenAI-compatible API (localhost:1234)
+- Support for GGUF models
+- Handle context window limits
+
+#### [NEW] [src/renderer/lib/ai/providers/openai-compatible.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/providers/openai-compatible.js)
+Generic OpenAI-compatible provider:
+- Works with any OpenAI-compatible API (Together.ai, Groq, local servers)
+- Configurable base URL and API key
+- Enables future provider additions without code changes
+
+#### [MODIFY] [src/renderer/lib/ai/modelManager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/modelManager.js)
+Model provider abstraction:
+- Provider registry (Gemini, Ollama, LMStudio, OpenAI-compatible)
+- Model switching at runtime
+- Fallback chain (try local first, fall back to API)
+- Cost tracking (show $0 for local, estimate cost for API)
+
+#### [NEW] [src/renderer/components/ModelSelector.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/ModelSelector.jsx)
+UI for model selection:
+- Dropdown to select provider and model
+- Show model capabilities (context window, tool support)
+- Display connection status for local providers
+- Cost indicator (💰 Paid API / 🆓 Local)
+
+**Recommended Local Models:**
+| Model | VRAM Required | Quality | Tool Calling |
+|-------|---------------|---------|--------------|
+| Llama 3.1 70B | 40GB+ | Excellent | ✅ Native |
+| Llama 3.1 8B | 8GB | Good | ✅ Native |
+| DeepSeek Coder 33B | 20GB | Excellent for code | ⚠️ Prompted |
+| Qwen2.5 72B | 40GB+ | Excellent | ✅ Native |
+| Mistral 7B | 6GB | Good | ⚠️ Prompted |
+
+### Verification Plan
+
+#### Manual Verification
+1. Install Ollama: `winget install Ollama.Ollama`
+2. Pull a model: `ollama pull llama3.1:8b`
+3. In AesopIDE, select Ollama provider in ModelSelector
+4. Send a coding prompt and verify response streams correctly
+5. Request a file edit and verify tool calling works
+6. Check status bar shows "🆓 Local" instead of cost estimate
+
+
+---
+
+## Phase 8: Chat Parity & Polish 🆕
+**Status:** ✅ Partially Completed
+**Goal:** Achieve "Antigravity-level" polish and feature parity for the chat interface.
+
+### Overview
+This phase bridges the gap between the current request-response chat and a modern, streaming, agentic interface. It introduces streaming responses, optimistic UI updates, and a dedicated "Task Mode" for complex operations.
+
+### Proposed Changes
+
+#### Phase 8.1: Streaming Response Engine ✅ COMPLETED
+**Goal:** Eliminate "blocking" feel. Response must start rendering < 200ms.
+- **Backend:** Update `ipcHandlers.js` to support `gemini:stream` channel.
+- **Frontend:** Refactor `useGemini` hook / `gemini.js` to handle `ondata` events.
+- **UI:** Render token-by-token in `PromptPanel.jsx`.
+
+#### Phase 8.2: The "Thinking" UI Protocol ✅ COMPLETED
+**Goal:** Hide raw tool logs and show "processing" states.
+- **Component:** Create `<ThoughtChain />` to group tool calls.
+- **Visuals:** Collapsible "Thinking..." blocks (like ChatGPT).
+- **Tool Output:** Render complex JSON results in a readable, collapsible view.
+
+#### Phase 8.3: Task Mode UI
+**Goal:** Separate "chatting" from "working".
+- **Sidebar:** Add toggle for `Chat` vs `Task`.
+- **Task View:** Render `task.md` as a live, interactive checklist.
+- **Artifacts:** Show `implementation_plan.md` and other artifacts in a dedicated panel, not just as file tabs.
+
+#### Verification Plan
+- **Streaming:** Verify "time to first token" is under 500ms.
+- **Visuals:** Confirm no "jank" when tool calls appear/disappear.
+- **Task Mode:** Verify state persists when switching tabs.
+
+---
+
+## Phase 19: Comprehensive Tool Framework 🆕
+**Status:** 📋 Planned - Required for Antigravity parity
+**Goal:** Implement all 40+ tools that Antigravity has
+
+### Overview
+Antigravity has a rich set of integrated tools. AesopIDE needs to match this for true parity.
+
+### Tools to Implement
+
+#### File System Tools (Enhance existing)
+- [x] `readFile` - Already implemented
+- [x] `writeFile` - Already implemented
+- [x] `newFile` / `newFolder` - Already implemented
+- [ ] `deleteFile` - Add with confirmation
+- [ ] `renameFile` / `moveFile` - Add path manipulation
+- [ ] `copyFile` - Add file duplication
+- [ ] `listDir` - Enhanced directory listing with metadata
+
+#### Code Intelligence Tools (New)
+- [ ] `codebaseSearch` - Semantic search across codebase
+- [ ] `grepSearch` - Regex pattern search (ripgrep integration)
+- [ ] `findByName` - File/folder name search (fd integration)
+- [ ] `viewCodeItem` - View specific function/class definitions
+- [ ] `viewFileOutline` - AST-based file structure
+
+#### Terminal Tools (Enhance existing)
+- [x] `runCommand` - Already implemented
+- [ ] `commandStatus` - Check background command status
+- [ ] `sendCommandInput` - Send input to running command
+- [ ] `killCommand` - Terminate running command
+
+#### Browser Tools (Phase 12 expansion)
+- [ ] `browserSubagent` - Spawn browser automation task
+- [ ] `readBrowserPage` - Get page content/DOM
+- [ ] `captureBrowserScreenshot` - Take screenshot
+- [ ] `readUrlContent` - Fetch URL without browser
+
+#### Git Tools (Enhance existing)
+- [x] `gitDiff` - Already implemented
+- [x] `gitApplyPatch` - Already implemented
+- [ ] `gitStatus` - Show working tree status
+- [ ] `gitCommit` - Create commit with message
+- [ ] `gitBranch` - Branch operations
+- [ ] `gitLog` - View commit history
+
+#### Image Tools (New)
+- [ ] `generateImage` - AI image generation (DALL-E, Stable Diffusion)
+- [ ] `viewImage` - Display image in IDE
+- [ ] `analyzeImage` - Vision model analysis
+
+#### Artifact Tools (New)
+- [ ] `createArtifact` - Create markdown/plan/walkthrough
+- [ ] `updateArtifact` - Modify existing artifact
+
+### Implementation Pattern
+
+Each tool should follow this structure:
+```javascript
+// src/renderer/lib/tools/definitions/readFile.js
+export const readFileTool = {
+    name: 'readFile',
+    description: 'Read the contents of a file from the filesystem',
+    parameters: {
+        type: 'object',
+        properties: {
+            path: { type: 'string', description: 'Absolute path to file' }
+        },
+        required: ['path']
+    },
+    execute: async ({ path }) => {
+        return await window.aesop.fs.readFile(path);
+    }
+};
+```
+
+---
+
+## Phase 20: Agentic Loop Engine 🆕
+**Status:** 📋 Planned - Core architecture for autonomous operation
+**Goal:** Implement the plan-execute-verify-backtrack loop that makes Antigravity effective
+
+### Overview
+Antigravity runs in an agentic loop that can:
+1. **Plan** - Break down complex tasks
+2. **Execute** - Run tools and make changes
+3. **Verify** - Check results and detect errors
+4. **Backtrack** - Undo and retry when things go wrong
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/agent/loop.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/loop.js)
+Core agent loop:
+```javascript
+class AgentLoop {
+    constructor(modelManager, toolFramework) {
+        this.model = modelManager;
+        this.tools = toolFramework;
+        this.mode = 'PLANNING'; // PLANNING | EXECUTION | VERIFICATION
+        this.history = [];
+        this.checkpoints = [];
+    }
+
+    async run(userRequest) {
+        this.createCheckpoint();
+        
+        while (!this.isComplete()) {
+            const response = await this.model.generate({
+                messages: this.history,
+                tools: this.tools.getDefinitions(),
+                systemPrompt: this.buildSystemPrompt()
+            });
+            
+            if (response.toolCalls) {
+                for (const call of response.toolCalls) {
+                    try {
+                        const result = await this.tools.execute(call);
+                        this.history.push({ role: 'tool', content: result });
+                        
+                        // Verification step
+                        if (this.mode === 'EXECUTION' && this.shouldVerify(call)) {
+                            await this.verify(call, result);
+                        }
+                    } catch (error) {
+                        await this.handleError(error, call);
+                    }
+                }
+            }
+            
+            if (response.modeSwitch) {
+                this.mode = response.modeSwitch;
+            }
+        }
+    }
+
+    async handleError(error, failedCall) {
+        this.retryCount++;
+        if (this.retryCount > 3) {
+            this.restoreCheckpoint();
+            return this.escalateToUser(error);
+        }
+        // Add error to context for self-correction
+        this.history.push({ 
+            role: 'system', 
+            content: `Tool call failed: ${error.message}. Please try a different approach.`
+        });
+    }
+}
+```
+
+#### [NEW] [src/renderer/lib/agent/modes.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/modes.js)
+Mode-specific behaviors:
+- **PLANNING**: Focus on understanding, create implementation plan
+- **EXECUTION**: Make changes, run commands
+- **VERIFICATION**: Test changes, validate results
+
+#### [NEW] [src/renderer/lib/agent/checkpoints.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/checkpoints.js)
+Checkpoint management:
+- Git stash-based checkpoints
+- File state snapshots
+- Restore on critical failures
+
+#### [MODIFY] [src/renderer/components/AgentManager.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/AgentManager.jsx)
+Enhanced agent UI:
+- Show current mode (Planning/Execution/Verification)
+- Display checkpoint history
+- Manual checkpoint restore option
+- Error recovery controls
+
+---
+
+## Phase 21: Context Window Management 🆕
+**Status:** 📋 Planned - Critical for long sessions
+**Goal:** Manage large context windows efficiently like Antigravity
+
+### Overview
+Antigravity can hold ~1M tokens in context. AesopIDE needs smart context management to:
+- Summarize old messages to free space
+- Prioritize relevant context
+- Handle very large files gracefully
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/context/manager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/context/manager.js)
+Context window manager:
+- Track token usage per message
+- Automatic summarization when approaching limit
+- Priority scoring for context items
+- Sliding window with anchored important context
+
+#### [NEW] [src/renderer/lib/context/summarizer.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/context/summarizer.js)
+Conversation summarization:
+- Compress old messages into summaries
+- Preserve key decisions and code changes
+- Use smaller/faster model for summarization
+
+#### [NEW] [src/renderer/lib/context/tokenizer.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/context/tokenizer.js)
+Token counting:
+- Accurate token estimation (tiktoken or model-specific)
+- Real-time context usage indicator
+- Warning at 80% capacity
+
+#### [MODIFY] [src/renderer/components/PromptPanel.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PromptPanel.jsx)
+Context usage display:
+- Token count indicator in status
+- "Summarize conversation" button
+- Context priority visualization
+
+---
+
+## Phase 22: Vision/Image Analysis 🆕
+**Status:** 📋 Planned - Required for UI debugging and screenshot analysis
+**Goal:** Enable AesopIDE to see and understand images like Antigravity
+
+### Overview
+Antigravity can analyze screenshots, UI mockups, and error images. AesopIDE needs this for:
+- Visual debugging ("Why does this button look wrong?")
+- UI implementation from mockups
+- Error screenshot analysis
+
+### Proposed Changes
+
+#### [MODIFY] [src/renderer/lib/ai/modelManager.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/modelManager.js)
+Add vision capabilities:
+- Detect if current model supports vision
+- Handle image inputs in message format
+- Base64 encode images for API
+
+#### [NEW] [src/renderer/lib/vision/imageProcessor.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/vision/imageProcessor.js)
+Image handling:
+- Resize large images to save tokens
+- Convert formats (PNG, JPG, WebP)
+- Extract from clipboard (paste image)
+
+#### [MODIFY] [src/renderer/components/PromptPanel.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/PromptPanel.jsx)
+Image input support:
+- Drag-and-drop images into prompt
+- Paste image from clipboard (Ctrl+V)
+- Image preview before sending
+- "Analyze screenshot" quick action
+
+#### [NEW] [ipcHandlers.js → vision:captureScreen](file:///c:/DevApps/AesopIDE/ipcHandlers.js)
+Screen capture:
+- Capture specific window
+- Capture screen region
+- Capture current browser state
+
+---
+
+## Phase 23: Multi-Agent Orchestration 🆕
+**Status:** 📋 Planned - Advanced capability for complex tasks
+**Goal:** Spawn specialized sub-agents like Antigravity's browser_subagent
+
+### Overview
+Antigravity can spawn sub-agents for specific tasks (browser automation, research, etc.). AesopIDE needs this for:
+- Parallel task execution
+- Specialized agents (browser, research, coding)
+- Task delegation without blocking main agent
+
+### Proposed Changes
+
+#### [NEW] [src/renderer/lib/agent/orchestrator.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/orchestrator.js)
+Agent orchestration:
+```javascript
+class AgentOrchestrator {
+    constructor() {
+        this.mainAgent = null;
+        this.subAgents = new Map();
+    }
+
+    async spawnSubAgent(type, task) {
+        const subAgent = new SubAgent({
+            type, // 'browser', 'research', 'coding'
+            task,
+            parentContext: this.mainAgent.getSummary(),
+            tools: this.getToolsForType(type)
+        });
+        
+        this.subAgents.set(subAgent.id, subAgent);
+        const result = await subAgent.run();
+        
+        // Report back to main agent
+        this.mainAgent.receiveSubAgentResult(subAgent.id, result);
+        return result;
+    }
+
+    getToolsForType(type) {
+        switch (type) {
+            case 'browser':
+                return ['launchBrowser', 'click', 'type', 'screenshot', 'getDom'];
+            case 'research':
+                return ['searchWeb', 'readUrl', 'summarize'];
+            case 'coding':
+                return ['readFile', 'writeFile', 'runCommand', 'searchCode'];
+        }
+    }
+}
+```
+
+#### [NEW] [src/renderer/lib/agent/subAgent.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/agent/subAgent.js)
+Sub-agent implementation:
+- Lighter context (focused on specific task)
+- Limited tool set (only what's needed)
+- Returns summary to parent agent
+- Isolated execution (errors don't crash main agent)
+
+#### [MODIFY] [src/renderer/components/AgentManager.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/AgentManager.jsx)
+Sub-agent visualization:
+- Show active sub-agents as nested cards
+- Display sub-agent progress
+- Allow cancellation of individual sub-agents
+
+---
+
+## Real-World Project Verification
+
+These milestones demonstrate AesopIDE's capabilities on actual projects (including DualPilot or any other project you're working on).
+
+### Milestone 1: Simple Feature Implementation
+**Test Case Example:** Complete a single-file feature (e.g., "Add GA4 integration to data layer")
+
+Steps:
+1. Open your project in AesopIDE
+2. Give AI a specific implementation task (e.g., "Implement [feature] in `path/to/file.ts`")
+3. Verify AI:
+   - Creates implementation plan
+   - Requests approval
+   - Executes plan (modifies/creates files as needed)
+   - Runs tests
+   - Creates git commit
+4. Manual review: Check if the feature works as expected
+
+### Milestone 2: Multi-File Refactoring
+**Test Case Example:** Refactor a system that touches multiple files (e.g., "Update authentication across all components")
+
+Steps:
+1. Tell AI: "Refactor [system/component] to use [new approach/library/pattern]"
+2. Verify AI:
+   - Identifies all affected files (potentially 20+)
+   - Creates comprehensive plan
+   - Executes changes with incremental commits
+   - Runs full test suite
+   - Generates walkthrough with before/after screenshots
+
+### Milestone 3: Full Autonomy Test
+**Test Case:** High-level requirement → working feature
+
+Steps:
+1. Give AI a high-level feature request (e.g., "Build a [component/feature] that [does something]")
+2. Provide no further guidance beyond the initial requirement
+3. Verify AI autonomously:
+   - Researches your codebase (uses schema context if available)
+   - Designs component/module architecture
+   - Implements the feature (creates files, writes code, adds tests)
+   - **Queries RAG** for best practices and library recommendations
+   - Tests the feature (using Phase 12 browser tools for UI, Phase 14 for unit tests)
+   - Generates visual artifact showing working feature
+   - Creates PR-ready branch with clean, logical commits
+
+**Success Criteria:** Feature works without manual intervention, code follows your project's established patterns and architectural guidelines
+
+---
+
+## Summary
+
+**Total Phases:** 24 (8 completed, 16 planned)
+
+**🎯 GOAL: Replace $20/month Google One AI subscription with AesopIDE**
+
+### Subscription Elimination Roadmap
+
+| Phase | What It Enables | Priority |
+|-------|-----------------|----------|
+| ✅ Phase 7.5 | Stability (ErrorBoundary) | Done |
+| 📋 Phase 8 | Monaco Editor + Self-correction | **Critical** |
+| 📋 Phase 12 | Browser automation | High |
+| 📋 Phase 14 | Test-driven debugging | High |
+| 📋 Phase 18 | **Local LLM = $0 AI** | **Critical** |
+| 📋 Phase 19 | All 40+ Antigravity tools | **Critical** |
+| 📋 Phase 20 | Agentic loop (plan-execute-verify) | **Critical** |
+| 📋 Phase 21 | Long session context management | High |
+| 📋 Phase 22 | Image/vision analysis | Medium |
+| 📋 Phase 23 | Multi-agent orchestration | Medium |
+
+### Cost Comparison After All Phases Complete
+
+| Option | Monthly Cost | Requirements |
+|--------|--------------|--------------|
+| Google One AI Premium | $20/month | Internet |
+| AesopIDE + Gemini API | $5-15/month | Internet |
+| AesopIDE + Local LLM | $0/month | 8GB+ VRAM GPU |
+
+### Recently Added Phases (Antigravity Parity):
+- 🆕 Phase 18: Local LLM Support (Ollama, LMStudio) - **Eliminates API costs**
+- 🆕 Phase 19: Comprehensive Tool Framework (40+ tools)
+- 🆕 Phase 20: Agentic Loop Engine (plan-execute-verify-backtrack)
+- 🆕 Phase 21: Context Window Management (summarization, prioritization)
+- 🆕 Phase 22: Vision/Image Analysis (screenshot debugging)
+- 🆕 Phase 23: Multi-Agent Orchestration (sub-agents for specialized tasks)
+
+### Previously Planned Phases:
+- ✅ Phase 7.5: Electron Best Practices (ErrorBoundary, IPC Schema, Workspace State)
+- 📋 Phase 8: Chat Parity & Polish (Streaming, Artifacts, Task Mode)
+- 📋 Phase 9: Automated Plan Execution
+- 📋 Phase 10: Supabase/Cloud Context Ingestion
+- 📋 Phase 11: Architectural Guardrails
+- 📋 Phase 12: Visual QA/UX Testing (Browser Automation)
+- 📋 Phase 13: Artifact Generation & Display
+- 📋 Phase 14: Autonomous Test Integration
+- 📋 Phase 16: Live Web Search & Auto-Ingestion
+- 📋 Phase 17: Extension System + MCP + Checkpoints
+
+### byLLM/RAG Integration Points:
+- ✅✅ Phase 10 (Cloud Context): CORE - Ingests schemas into RAG
+- ✅✅ Phase 14 (Test Integration): CORE - Retrieves debugging patterns
+- ✅✅ Phase 16 (Live Search): CORE - Auto-ingests web search results into RAG
+- ✅ Phase 8: Monaco + RAG for enhanced code context
+- ✅ Phase 17: Extensions can contribute RAG sources
+- ✅ Phases 7, 9, 11, 12: Query RAG for best practices
+- ❌ Phase 13: No direct RAG integration (infrastructure)
+
+### Recommended Implementation Order:
+1. ✅ Phase 7.5 (Done) - Stability foundation
+2. 📋 Phase 8 - Monaco Editor + Self-correction loop
+3. 📋 Phase 18 - **Local LLM Support (critical for $0 operation)**
+4. 📋 Phase 19 - Tool framework (match Antigravity capabilities)
+5. 📋 Phase 20 - Agentic loop (core autonomous behavior)
+6. 📋 Phase 12 - Browser automation
+7. 📋 Phase 14 - Autonomous testing
+8. 📋 Phase 21-23 - Advanced features (context, vision, multi-agent)
+
+### When You Can Cancel Google One:
+After completing Phases 8, 18, 19, and 20, AesopIDE will be capable of:
+- ✅ All file/code operations I can do
+- ✅ Planning and executing multi-step tasks
+- ✅ Self-correcting on errors
+- ✅ Running on free local LLMs
+
+**Estimated development time to subscription elimination:** 40-60 hours of focused implementation
+
+---
+
+## Phase 24: Unity Game Development System (Pending)
+**Status:** 📋 Planned - Not yet implemented  
+**byLLM Integration:** ✅ Uses RAG for Unity best practices, monetization patterns, and platform requirements
+
+### Overview
+Transform AesopIDE into a complete commercial game development studio capable of reading game design documents, generating all required assets (art/audio), implementing Unity C# code, configuring monetization, and deploying to all major platforms (Mobile, Web, PC, Console).
+
+### User Review Required
+
+> [!IMPORTANT]
+> **Game Dev Mode Toggle:** All Unity features will be behind a new "🎮 Game Dev Mode" toggle in the top bar. When disabled, AesopIDE functions exactly as it does today with zero impact on existing workflows.
+
+> [!WARNING]
+> **Platform Requirements:**
+> - Unity Hub and Unity Editor(s) installed
+> - Unity Pro license required for console exports ($2,040/year)
+> - Developer accounts: Apple Developer, Google Play, Steam, Nintendo, PlayStation, Xbox
+> - Platform SDKs: Steam SDK, Nintendo SDK, PlayStation SDK, Xbox GDK (under NDA)
+> - External API keys: Unity Ads/AdMob, ElevenLabs/OpenAI Audio (optional), Stripe
+
+### Proposed Changes
+
+#### [MODIFY] [package.json](file:///c:/DevApps/AesopIDE/package.json)
+Add document parsing dependencies:
+```json
+{
+  "dependencies": {
+    "mammoth": "^1.6.0",     // .docx reader
+    "pdf-parse": "^1.1.1",   // .pdf reader
+    "csv-parse": "^5.5.0"    // .csv reader
+  }
+}
+```
+
+#### [MODIFY] [src/renderer/components/TopBar.jsx](file:///c:/DevApps/AesopIDE/src/renderer/components/TopBar.jsx)
+Add Game Dev Mode toggle:
+- New state: `gameDevMode` (default: false)
+- Visual indicator: 🎮 icon with on/off styling
+- Pass state to App.jsx and systemPrompt.js
+
+#### [MODIFY] [src/renderer/lib/ai/systemPrompt.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/ai/systemPrompt.js)
+Make system prompt dynamic based on Game Dev Mode:
+```javascript
+export function getSystemPrompt(gameDevMode = false) {
+  let prompt = BASE_SYSTEM_PROMPT; // Existing prompt
+  
+  if (gameDevMode) {
+    prompt += `
+
+### GAME DEVELOPMENT MODE
+You are now a senior game developer, producer, and technical artist.
+
+**Your Role:**
+1. Read game design documents (Word, CSV, PDF) via readDesignDoc
+2. Create detailed game_plan.md for user approval
+3. Generate all required assets (sprites, textures, audio)
+4. Implement game code in Unity (C#)
+5. Configure monetization (ads, IAP, payments)
+6. Build for all target platforms
+
+**CRITICAL: Plan-First Protocol**
+- ALWAYS create game_plan.md before generating any assets or code
+- WAIT for user approval before execution
+- Allow user to edit plan between planning and execution phases
+
+### UNITY PLATFORM DEPLOYMENT
+**Mobile:** iOS (Xcode), Android (Gradle)
+**Web:** WebGL optimized builds
+**PC:** Steam (Steamworks SDK integration)
+**Console:** Nintendo Switch, PlayStation 5, Xbox Series
+
+### MONETIZATION SYSTEMS
+**Mobile Ads:** Unity Ads, AdMob integration patterns
+- Interstitial: After game over (every 2-3 runs)
+- Rewarded: Continue after fail, unlock hints
+- Banner: Bottom of main menu
+
+**In-App Purchases:** Unity IAP for mobile stores
+**Web Payments:** Stripe Checkout for unlock features
+**Steam:** Steamworks inventory, achievements, leaderboards
+
+### ASSET GENERATION WORKFLOW
+1. Plan assets needed (sprites, textures, sounds)
+2. Generate using generateGameAsset() BEFORE writing code
+3. Reference generated assets in Unity scripts
+4. Build and verify
+
+`;
+  }
+  
+  return prompt;
+}
+```
+
+#### [MODIFY] [ipcHandlers.js](file:///c:/DevApps/AesopIDE/ipcHandlers.js)
+Add document reading and audio generation handlers:
+```javascript
+const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
+const csvParse = require('csv-parse/sync');
+
+// Document reader
+ipcMain.handle("fs:readDocument", async (event, filePath) => {
+  const ext = path.extname(filePath).toLowerCase();
+  
+  try {
+    if (ext === '.docx') {
+      const result = await mammoth.extractRawText({ path: filePath });
+      return { ok: true, content: result.value };
+    }
+    if (ext === '.pdf') {
+      const dataBuffer = await fs.readFile(filePath);
+      const data = await pdfParse(dataBuffer);
+      return { ok: true, content: data.text };
+    }
+    if (ext === '.csv') {
+      const fileContent = await fs.readFile(filePath, 'utf8');
+      const records = csvParse.parse(fileContent, { columns: true });
+      return { ok: true, content: JSON.stringify(records, null, 2) };
+    }
+    // Fallback: plain text
+    const content = await fs.readFile(filePath, 'utf8');
+    return { ok: true, content };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Audio generation (placeholder for external API)
+ipcMain.handle("external:generateAudio", async (event, { prompt, fileName }) => {
+  // TODO: Integrate ElevenLabs, OpenAI Audio, or other TTS/music API
+  // For now, return placeholder/silent WAV
+  console.warn('[Audio Generation] Not implemented, returning placeholder');
+  return { ok: true, placeholder: true };
+});
+```
+
+#### [MODIFY] [src/renderer/lib/tools/framework.js](file:///c:/DevApps/AesopIDE/src/renderer/lib/tools/framework.js)
+Add Unity-specific tools:
+```javascript
+// Document reading
+case 'readDesignDoc':
+  if (!params.path) throw new Error("readDesignDoc requires 'path'");
+  const docResult = await window.aesop.fs.readDocument(params.path);
+  if (!docResult.ok) throw new Error(docResult.error);
+  return { content: docResult.content, path: params.path };
+
+// Unity CLI execution
+case 'unityRunCommand':
+  const unityPath = params.unityPath || 'Unity.exe';
+  const projectPath = params.projectPath || currentRoot;
+  const unityArgs = params.args || '';
+  const cmd = `"${unityPath}" -batchmode -quit -projectPath "${projectPath}" ${unityArgs}`;
+  const unityResult = await window.aesop.tools.runCommand(cmd);
+  return unityResult;
+
+// Smart C# script creation
+case 'unityCreateScript':
+  const className = params.className || 'NewScript';
+  const scriptPath = params.path || `${className}.cs`;
+  const scriptContent = params.content || generateMonoBehaviourTemplate(className);
+  await window.aesop.fs.writeFile(`Assets/Scripts/${scriptPath}`, scriptContent);
+  return { success: true, path: `Assets/Scripts/${scriptPath}` };
+
+// Platform-specific builds
+case 'unityBuildGame':
+  const buildCommands = {
+    'ios': '-buildTarget iOS -executeMethod BuildScript.BuildIOS',
+    'android': '-buildTarget Android -executeMethod BuildScript.BuildAndroid',
+    'webgl': '-buildTarget WebGL -executeMethod BuildScript.BuildWebGL',
+    'windows': '-buildTarget Win64 -executeMethod BuildScript.BuildWindows',
+    'steam': '-buildTarget Win64 -executeMethod BuildScript.BuildSteam',
+    'switch': '-buildTarget Switch -executeMethod BuildScript.BuildSwitch',
+    'ps5': '-buildTarget PS5 -executeMethod BuildScript.BuildPS5',
+    'xbox': '-buildTarget GameCoreXboxSeries -executeMethod BuildScript.BuildXbox'
+  };
+  const platform = params.platform || 'windows';
+  const buildArgs = buildCommands[platform];
+  if (!buildArgs) throw new Error(`Unknown platform: ${platform}`);
+  return await executeTool('unityRunCommand', { args: buildArgs });
+
+// Game asset generation
+case 'generateGameAsset':
+  if (params.type === 'image') {
+    // Use existing generate_image infrastructure
+    const imageName = params.imageName || 'game_asset';
+    const imagePath = await generateImage(params.prompt, imageName);
+    // Copy to Unity Assets folder
+    const destPath = `Assets/Textures/${params.fileName || imageName}.png`;
+    await window.aesop.fs.copyFile(imagePath, path.join(currentRoot, destPath));
+    return { success: true, unityPath: destPath, fullPath: imagePath };
+  }
+  if (params.type === 'audio') {
+    const audioResult = await window.aesop.external.generateAudio({
+      prompt: params.prompt,
+      fileName: params.fileName
+    });
+    if (audioResult.placeholder) {
+      return { success: true, warning: 'Audio generation not configured, using placeholder' };
+    }
+    const destPath = `Assets/Audio/${params.fileName}.wav`;
+    await window.aesop.fs.writeFile(destPath, audioResult.data);
+    return { success: true, unityPath: destPath };
+  }
+  throw new Error(`Unknown asset type: ${params.type}`);
+
+// Monetization configuration
+case 'configureMonetization':
+  const platforms = params.platforms || ['mobile'];
+  const strategy = params.strategy || 'ads'; // 'ads', 'iap', 'both'
+  const monetizationCode = generateMonetizationScript(platforms, strategy);
+  await window.aesop.fs.writeFile('Assets/Scripts/MonetizationManager.cs', monetizationCode);
+  return { success: true, path: 'Assets/Scripts/MonetizationManager.cs' };
+```
+
+Helper function for MonoBehaviour template:
+```javascript
+function generateMonoBehaviourTemplate(className) {
+  return `using UnityEngine;
+
+public class ${className} : MonoBehaviour
+{
+    void Start()
+    {
+        // Initialization
+    }
+
+    void Update()
+    {
+        // Called every frame
+    }
+}`;
+}
+
+function generateMonetizationScript(platforms, strategy) {
+  return `using UnityEngine;
+#if UNITY_ADS
+using UnityEngine.Advertisements;
+#endif
+
+public class MonetizationManager : MonoBehaviour
+{
+    public static MonetizationManager Instance { get; private set; }
+
+    void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+        DontDestroyOnLoad(gameObject);
+    }
+
+    void Start()
+    {
+        InitializeAds();
+    }
+
+    void InitializeAds()
+    {
+        #if UNITY_ADS
+        string gameId = "${platforms.includes('ios') ? 'YOUR_IOS_GAME_ID' : 'YOUR_ANDROID_GAME_ID'}";
+        Advertisement.Initialize(gameId, testMode: true);
+        #endif
+    }
+
+    public void ShowInterstitial()
+    {
+        #if UNITY_ADS
+        if (Advertisement.IsReady("Interstitial_Android"))
+        {
+            Advertisement.Show("Interstitial_Android");
+        }
+        #endif
+    }
+
+    public void ShowRewarded(System.Action onComplete)
+    {
+        #if UNITY_ADS
+        if (Advertisement.IsReady("Rewarded_Android"))
+        {
+            var options = new ShowOptions { resultCallback = result => {
+                if (result == ShowResult.Finished) onComplete?.Invoke();
+            }};
+            Advertisement.Show("Rewarded_Android", options);
+        }
+        #endif
+    }
+}`;
+}
+```
+
+### Verification Plan
+
+#### Manual Verification - Document Ingestion
+1. Create `game_design.docx` with text: "One-tap reaction game. Stop bar in green zone. Mobile + Web. Monetize with ads."
+2. Toggle on Game Dev Mode
+3. Prompt: "Read game_design.docx and create implementation plan"
+4. Verify AI creates `game_plan.md` with:
+   - Mechanics breakdown
+   - Required assets (sprites, sounds)
+   - Monetization strategy
+   - Target platforms
+
+#### Manual Verification - Asset Generation
+1. User approves plan
+2. Prompt: "Generate the bar sprite and green zone sprite"
+3. Verify AI:
+   - Calls `generateGameAsset` twice
+   - Creates images in `Assets/Textures/`
+   - Returns Unity-relative paths
+
+#### Manual Verification - Code Implementation
+1. Prompt: "Implement the tap controller script"
+2. Verify AI:
+   - Creates `TapController.cs` in `Assets/Scripts/`
+   - References generated sprites
+   - Includes score tracking logic
+
+#### Manual Verification - Monetization
+1. Prompt: "Configure ads for mobile"
+2. Verify AI:
+   - Calls `configureMonetization`
+   - Creates `MonetizationManager.cs`
+   - Includes Unity Ads integration code
+
+#### Manual Verification - Multi-Platform Build
+1. Prompt: "Build for WebGL and Android"
+2. Verify AI:
+   - Calls `unityBuildGame` twice
+   - Uses correct build targets
+   - Reports build status
+
+### Integration Points with Existing Phases
+- **Phase 6 (RAG)**: Ingest Unity best practices, common game patterns
+- **Phase 8 (Monaco)**: Syntax highlighting for C# scripts
+- **Phase 12 (Browser)**: Test WebGL builds automatically
+- **Phase 14 (Testing)**: Run Unity Test Framework tests
+
+### Limitations
+- Console SDKs must be manually installed (under NDA)
+- Audio generation requires external API setup
+- Unity must be in PATH or path manually configured
+- Platform builds require valid signing certificates/credentials
